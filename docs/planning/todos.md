@@ -35,9 +35,10 @@ Legend:
     - Image, video, audio, and other file max sizes are decided.
     - MVP allowed source types are finalized as script and image references first; video reference support includes thumbnail/playback.
 
-- [ ] [P0] [Product] Lock export manifest completeness
+- [x] [P0] [Product] Lock export manifest completeness
   - Source: Questionnaire section 19
   - Recommendation: use the full recommended JSON manifest; keep CSV simpler for editor handoff.
+  - Implemented: Wave 5 uses the recommended JSON manifest with project, export, ordered panel, selected asset, duration, stale warning, entity mapping, and generation job fields; CSV mirrors editor-useful fields.
   - Acceptance:
     - Required manifest fields are finalized.
     - Minimum recommendation is accepted or edited: project title, timestamp, scene/panel order, selected asset paths, narration, duration fields, stale warnings, entity mappings, provider/model, job IDs.
@@ -445,29 +446,32 @@ Legend:
 
 ## Phase 14: Export
 
-- [ ] [P0] [Export] Define export package structure
+- [x] [P0] [Export] Define export package structure
   - Source: Questionnaire section 19
+  - Implemented: Wave 5 creates `project_export_YYYYMMDD_HHMM.zip` with ordered panel folders, panel metadata JSON, timeline_manifest.json, and timeline_manifest.csv.
   - Acceptance:
     - Root folder is `project_name_export_YYYYMMDD_HHMM`.
-    - Panel folders are `panel_001`, `panel_002`, etc.
-    - Files use `video.mp4`, `audio.wav`, `image.png` naming where included.
-    - Export currently includes ordered folders, selected video, selected audio, JSON manifest, and CSV manifest.
+    - Panel folders use ordered names such as `001_panel_intro`.
+    - Files use stable semantic names with source extensions, such as `video.mp4`, `audio.wav`, `image.png`/`image.svg`, `first_frame.png`/`first_frame.svg`, and `last_frame.png`/`last_frame.svg`.
+    - Export currently includes ordered folders, selected video, selected audio, selected image, first/last frames, JSON manifest, and CSV manifest.
 
-- [ ] [P0] [Export] Decide whether selected images and first/last frames should export
+- [x] [P0] [Export] Decide whether selected images and first/last frames should export
   - Source: Questionnaire sections 14, 19
-  - Open: images are selected per panel, but selected image and first/last frames were not checked in export contents.
+  - Decision: include selected image plus first/last frames by default because editors may need keyframes for manual assembly.
   - Acceptance:
-    - Either include selected image/frame assets because editors may need them, or explicitly exclude them from MVP exports.
+    - Include selected image/frame assets because editors may need them.
 
-- [ ] [P0] [Export] Implement timeline manifest JSON and CSV
+- [x] [P0] [Export] Implement timeline manifest JSON and CSV
   - Source: Questionnaire section 19
+  - Implemented: Wave 5 stores TimelineManifest rows and manifest JSON/CSV assets, and includes both manifest files in the ZIP.
   - Acceptance:
     - Manifest includes all finalized required fields.
     - CSV mirrors editor-useful fields.
     - Asset paths are relative to ZIP root.
 
-- [ ] [P0] [Frontend] Build export readiness and export action
+- [x] [P0] [Frontend] Build export readiness and export action
   - Source: Questionnaire sections 1, 19
+  - Implemented: Wave 5 adds the Export page readiness checks, warning list, explicit validate action, explicit package creation action, and latest ZIP download link.
   - Acceptance:
     - Missing assets and stale warnings are shown as warnings.
     - Nothing blocks export unless later selected.
@@ -497,8 +501,9 @@ Legend:
     - Selected stale triggers create warnings.
     - No stale trigger creates a generation job.
 
-- [ ] [P0] [Testing] Add export ZIP and manifest tests
+- [x] [P0] [Testing] Add export ZIP and manifest tests
   - Source: Questionnaire section 23
+  - Implemented: Wave 5 adds service coverage for selected assets, ZIP signature, JSON manifest paths, CSV content, ExportPackage records, TimelineManifest rows, and stored package objects.
   - Acceptance:
     - ZIP folder structure is validated.
     - JSON schema is validated.

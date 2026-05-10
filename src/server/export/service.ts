@@ -1,0 +1,546 @@
+import { AssetType, ExportPackageStatus, Prisma } from "@prisma/client";
+
+import {
+  createExportPackage,
+  createGeneratedAsset,
+  createTimelineManifest,
+  type DbClient
+} from "@/server/db/repositories";
+import { LocalStorageDriver } from "@/server/storage/local";
+import type { StorageDriver } from "@/server/storage/types";
+
+import { createUncompressedZip, type ZipEntry } from "./zip";
+
+type SelectedAsset = {
+  id: string;
+  assetType: AssetType;
+  fileUrl: string;
+  storagePath: string;
+  mimeType: string;
+  durationSeconds: number | null;
+  generationJobId: string | null;
+  metadata: Prisma.JsonValue;
+};
+
+type PanelForExport = {
+  id: string;
+  orderIndex: number;
+  title: string;
+  narrationText: string | null;
+  targetDurationSeconds: number | null;
+  notes: string | null;
+  mappedEntityIds: Prisma.JsonValue;
+  staleState: Prisma.JsonValue;
+  selectedImageAsset: SelectedAsset | null;
+  selectedVideoAsset: SelectedAsset | null;
+  selectedAudioAsset: SelectedAsset | null;
+  firstFrameAsset: SelectedAsset | null;
+  lastFrameAsset: SelectedAsset | null;
+  scene: {
+    id: string;
+    orderIndex: number;
+    title: string;
+  };
+};
+
+export type ExportReadiness = {
+  projectId: string | null;
+  projectTitle: string | null;
+  totalPanels: number;
+  selectedImages: number;
+  selectedVideos: number;
+  selectedAudio: number;
+  selectedFirstFrames: number;
+  selectedLastFrames: number;
+  stalePanels: number;
+  warnings: string[];
+  latestPackage: {
+    id: string;
+    status: string;
+    zipFileUrl: string | null;
+    createdAt: string;
+    completedAt: string | null;
+  } | null;
+};
+
+export type ExportPackageResult = {
+  exportPackageId: string;
+  zipFileUrl: string;
+  manifest: TimelineManifestJson;
+  csv: string;
+};
+
+export type TimelineManifestJson = {
+  schemaVersion: 1;
+  project: {
+    id: string;
+    title: string;
+    aspectRatio: string;
+  };
+  export: {
+    timestamp: string;
+    rootFolder: string;
+    packageId: string;
+    includes: {
+      selectedImage: boolean;
+      firstFrame: boolean;
+      lastFrame: boolean;
+      video: boolean;
+      audio: boolean;
+      panelMetadataJson: boolean;
+      csvManifest: boolean;
+    };
+  };
+  panels: TimelineManifestPanel[];
+  warnings: string[];
+};
+
+export type TimelineManifestPanel = {
+  index: number;
+  sceneIndex: number;
+  sceneTitle: string;
+  panelId: string;
+  panelTitle: string;
+  folder: string;
+  selectedVideoPath: string | null;
+  selectedAudioPath: string | null;
+  selectedImagePath: string | null;
+  firstFramePath: string | null;
+  lastFramePath: string | null;
+  narrationText: string | null;
+  targetDurationSeconds: number | null;
+  actualVideoDurationSeconds: number | null;
+  actualAudioDurationSeconds: number | null;
+  notes: string | null;
+  mappedEntityIds: string[];
+  staleWarnings: string[];
+  sourceAssetIds: {
+    video: string | null;
+    audio: string | null;
+    image: string | null;
+    firstFrame: string | null;
+    lastFrame: string | null;
+  };
+  generationJobIds: {
+    video: string | null;
+    audio: string | null;
+    image: string | null;
+    firstFrame: string | null;
+    lastFrame: string | null;
+  };
+};
+
+type CreateExportOptions = {
+  projectId?: string | null;
+  includeCsv?: boolean;
+  storage?: StorageDriver;
+  now?: () => Date;
+};
+
+export async function getExportReadiness(db: DbClient, projectId?: string | null): Promise<ExportReadiness> {
+  const project = await loadProjectForExport(db, projectId);
+
+  if (!project) {
+    return {
+      projectId: null,
+      projectTitle: null,
+      totalPanels: 0,
+      selectedImages: 0,
+      selectedVideos: 0,
+      selectedAudio: 0,
+      selectedFirstFrames: 0,
+      selectedLastFrames: 0,
+      stalePanels: 0,
+      warnings: ["Create or seed a project before exporting."],
+      latestPackage: null
+    };
+  }
+
+  const panels = orderedPanels(project);
+  const latestPackage = await db.exportPackage.findFirst({
+    where: { projectId: project.id },
+    orderBy: { createdAt: "desc" }
+  });
+
+  return {
+    projectId: project.id,
+    projectTitle: project.title,
+    totalPanels: panels.length,
+    selectedImages: panels.filter((panel) => panel.selectedImageAsset).length,
+    selectedVideos: panels.filter((panel) => panel.selectedVideoAsset).length,
+    selectedAudio: panels.filter((panel) => panel.selectedAudioAsset).length,
+    selectedFirstFrames: panels.filter((panel) => panel.firstFrameAsset).length,
+    selectedLastFrames: panels.filter((panel) => panel.lastFrameAsset).length,
+    stalePanels: panels.filter((panel) => staleWarnings(panel.staleState).length > 0).length,
+    warnings: exportWarnings(panels),
+    latestPackage: latestPackage
+      ? {
+          id: latestPackage.id,
+          status: latestPackage.status,
+          zipFileUrl: latestPackage.zipFileUrl,
+          createdAt: latestPackage.createdAt.toISOString(),
+          completedAt: latestPackage.completedAt?.toISOString() ?? null
+        }
+      : null
+  };
+}
+
+export async function createOrderedExportPackage(
+  db: DbClient,
+  options: CreateExportOptions = {}
+): Promise<ExportPackageResult> {
+  const project = await loadProjectForExport(db, options.projectId);
+
+  if (!project) {
+    throw new Error("Create or seed a project before exporting.");
+  }
+
+  const storage = options.storage ?? new LocalStorageDriver();
+  const now = options.now?.() ?? new Date();
+  const panels = orderedPanels(project);
+  const rootFolder = `${slugify(project.title)}_export_${timestampSlug(now)}`;
+  const exportPackage = await createExportPackage(db, {
+    projectId: project.id,
+    status: ExportPackageStatus.RUNNING,
+    includedPanelIds: panels.map((panel) => panel.id),
+    logs: [{ at: now.toISOString(), message: "Manual ordered package export started." }]
+  });
+  const manifest = buildManifest({
+    project,
+    panels,
+    packageId: exportPackage.id,
+    rootFolder,
+    timestamp: now.toISOString(),
+    includeCsv: options.includeCsv ?? true
+  });
+  const csv = createCsvManifest(manifest);
+  const zipEntries = await buildZipEntries(storage, rootFolder, manifest, panels);
+
+  zipEntries.push(
+    textEntry(`${rootFolder}/timeline_manifest.json`, JSON.stringify(manifest, null, 2)),
+    textEntry(`${rootFolder}/timeline_manifest.csv`, csv)
+  );
+
+  const zipBytes = createUncompressedZip(zipEntries);
+  const basePath = `exports/${project.id}/${exportPackage.id}`;
+  const [zipObject, manifestObject, csvObject] = await Promise.all([
+    storage.putObject({
+      path: `${basePath}/${rootFolder}.zip`,
+      bytes: zipBytes,
+      contentType: "application/zip",
+      metadata: { projectId: project.id, exportPackageId: exportPackage.id }
+    }),
+    storage.putObject({
+      path: `${basePath}/timeline_manifest.json`,
+      bytes: encodeText(JSON.stringify(manifest, null, 2)),
+      contentType: "application/json",
+      metadata: { projectId: project.id, exportPackageId: exportPackage.id }
+    }),
+    storage.putObject({
+      path: `${basePath}/timeline_manifest.csv`,
+      bytes: encodeText(csv),
+      contentType: "text/csv",
+      metadata: { projectId: project.id, exportPackageId: exportPackage.id }
+    })
+  ]);
+  const [manifestJsonAsset, manifestCsvAsset] = await Promise.all([
+    createGeneratedAsset(db, {
+      projectId: project.id,
+      assetType: AssetType.FILE,
+      fileUrl: manifestObject.url,
+      previewUrl: manifestObject.url,
+      storagePath: manifestObject.path,
+      mimeType: "application/json",
+      metadata: { exportPackageId: exportPackage.id, kind: "timeline_manifest_json" }
+    }),
+    createGeneratedAsset(db, {
+      projectId: project.id,
+      assetType: AssetType.FILE,
+      fileUrl: csvObject.url,
+      previewUrl: csvObject.url,
+      storagePath: csvObject.path,
+      mimeType: "text/csv",
+      metadata: { exportPackageId: exportPackage.id, kind: "timeline_manifest_csv" }
+    })
+  ]);
+  await db.exportPackage.update({
+    where: { id: exportPackage.id },
+    data: {
+      status: ExportPackageStatus.COMPLETED,
+      zipFileUrl: zipObject.url,
+      manifestJsonAssetId: manifestJsonAsset.id,
+      manifestCsvAssetId: manifestCsvAsset.id,
+      completedAt: new Date(),
+      logs: [
+        { at: now.toISOString(), message: "Manual ordered package export started." },
+        { at: new Date().toISOString(), message: `Created ZIP with ${zipEntries.length} entries.` }
+      ]
+    }
+  });
+  await createTimelineManifest(db, {
+    projectId: project.id,
+    exportPackageId: exportPackage.id,
+    manifestJson: manifest as unknown as Prisma.InputJsonValue,
+    manifestCsv: csv
+  });
+
+  return {
+    exportPackageId: exportPackage.id,
+    zipFileUrl: zipObject.url,
+    manifest,
+    csv
+  };
+}
+
+function buildManifest(input: {
+  project: NonNullable<Awaited<ReturnType<typeof loadProjectForExport>>>;
+  panels: PanelForExport[];
+  packageId: string;
+  rootFolder: string;
+  timestamp: string;
+  includeCsv: boolean;
+}): TimelineManifestJson {
+  const panels = input.panels.map((panel, index) => {
+    const folder = `${String(index + 1).padStart(3, "0")}_panel_${slugify(panel.title)}`;
+
+    return {
+      index: index + 1,
+      sceneIndex: panel.scene.orderIndex,
+      sceneTitle: panel.scene.title,
+      panelId: panel.id,
+      panelTitle: panel.title,
+      folder,
+      selectedVideoPath: panel.selectedVideoAsset ? `${folder}/video${extensionForAsset(panel.selectedVideoAsset)}` : null,
+      selectedAudioPath: panel.selectedAudioAsset ? `${folder}/audio${extensionForAsset(panel.selectedAudioAsset)}` : null,
+      selectedImagePath: panel.selectedImageAsset ? `${folder}/image${extensionForAsset(panel.selectedImageAsset)}` : null,
+      firstFramePath: panel.firstFrameAsset ? `${folder}/first_frame${extensionForAsset(panel.firstFrameAsset)}` : null,
+      lastFramePath: panel.lastFrameAsset ? `${folder}/last_frame${extensionForAsset(panel.lastFrameAsset)}` : null,
+      narrationText: panel.narrationText,
+      targetDurationSeconds: panel.targetDurationSeconds,
+      actualVideoDurationSeconds: panel.selectedVideoAsset?.durationSeconds ?? null,
+      actualAudioDurationSeconds: panel.selectedAudioAsset?.durationSeconds ?? null,
+      notes: panel.notes,
+      mappedEntityIds: jsonStringArray(panel.mappedEntityIds),
+      staleWarnings: staleWarnings(panel.staleState),
+      sourceAssetIds: {
+        video: panel.selectedVideoAsset?.id ?? null,
+        audio: panel.selectedAudioAsset?.id ?? null,
+        image: panel.selectedImageAsset?.id ?? null,
+        firstFrame: panel.firstFrameAsset?.id ?? null,
+        lastFrame: panel.lastFrameAsset?.id ?? null
+      },
+      generationJobIds: {
+        video: panel.selectedVideoAsset?.generationJobId ?? null,
+        audio: panel.selectedAudioAsset?.generationJobId ?? null,
+        image: panel.selectedImageAsset?.generationJobId ?? null,
+        firstFrame: panel.firstFrameAsset?.generationJobId ?? null,
+        lastFrame: panel.lastFrameAsset?.generationJobId ?? null
+      }
+    };
+  });
+
+  return {
+    schemaVersion: 1,
+    project: {
+      id: input.project.id,
+      title: input.project.title,
+      aspectRatio: input.project.aspectRatio
+    },
+    export: {
+      timestamp: input.timestamp,
+      rootFolder: input.rootFolder,
+      packageId: input.packageId,
+      includes: {
+        selectedImage: true,
+        firstFrame: true,
+        lastFrame: true,
+        video: true,
+        audio: true,
+        panelMetadataJson: true,
+        csvManifest: input.includeCsv
+      }
+    },
+    panels,
+    warnings: exportWarnings(input.panels)
+  };
+}
+
+async function buildZipEntries(
+  storage: StorageDriver,
+  rootFolder: string,
+  manifest: TimelineManifestJson,
+  panels: PanelForExport[]
+) {
+  const entries: ZipEntry[] = [];
+
+  for (const panelManifest of manifest.panels) {
+    const panel = panels.find((candidate) => candidate.id === panelManifest.panelId)!;
+    const folder = `${rootFolder}/${panelManifest.folder}`;
+    const assets = [
+      { asset: panel.selectedVideoAsset, path: panelManifest.selectedVideoPath },
+      { asset: panel.selectedAudioAsset, path: panelManifest.selectedAudioPath },
+      { asset: panel.selectedImageAsset, path: panelManifest.selectedImagePath },
+      { asset: panel.firstFrameAsset, path: panelManifest.firstFramePath },
+      { asset: panel.lastFrameAsset, path: panelManifest.lastFramePath }
+    ];
+
+    for (const item of assets) {
+      if (!item.asset || !item.path) continue;
+      const object = await storage.getObject(item.asset.storagePath);
+      entries.push({
+        path: `${rootFolder}/${item.path}`,
+        bytes: object.bytes
+      });
+    }
+
+    entries.push(textEntry(`${folder}/metadata.json`, JSON.stringify(panelManifest, null, 2)));
+  }
+
+  return entries;
+}
+
+function createCsvManifest(manifest: TimelineManifestJson) {
+  const headers = [
+    "index",
+    "scene",
+    "panel_title",
+    "video",
+    "audio",
+    "image",
+    "first_frame",
+    "last_frame",
+    "narration",
+    "target_duration",
+    "video_duration",
+    "audio_duration",
+    "stale_warnings"
+  ];
+  const rows = manifest.panels.map((panel) => [
+    panel.index,
+    panel.sceneTitle,
+    panel.panelTitle,
+    panel.selectedVideoPath ?? "",
+    panel.selectedAudioPath ?? "",
+    panel.selectedImagePath ?? "",
+    panel.firstFramePath ?? "",
+    panel.lastFramePath ?? "",
+    panel.narrationText ?? "",
+    panel.targetDurationSeconds ?? "",
+    panel.actualVideoDurationSeconds ?? "",
+    panel.actualAudioDurationSeconds ?? "",
+    panel.staleWarnings.join("; ")
+  ]);
+
+  return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
+function exportWarnings(panels: PanelForExport[]) {
+  const warnings: string[] = [];
+
+  if (!panels.length) warnings.push("Project has no panels.");
+  for (const panel of panels) {
+    const label = `${panel.scene.orderIndex}.${panel.orderIndex} ${panel.title}`;
+    if (!panel.selectedVideoAsset) warnings.push(`${label}: no selected video asset.`);
+    if (!panel.selectedAudioAsset) warnings.push(`${label}: no selected audio asset.`);
+    if (!panel.selectedImageAsset) warnings.push(`${label}: no selected image asset.`);
+    for (const stale of staleWarnings(panel.staleState)) {
+      warnings.push(`${label}: ${stale}`);
+    }
+  }
+
+  return warnings;
+}
+
+async function loadProjectForExport(db: DbClient, projectId?: string | null) {
+  const where = projectId
+    ? { id: projectId }
+    : undefined;
+
+  if (where) {
+    return db.project.findUnique({
+      where,
+      include: projectExportInclude
+    });
+  }
+
+  return db.project.findFirst({
+    orderBy: { updatedAt: "desc" },
+    include: projectExportInclude
+  });
+}
+
+const projectExportInclude = {
+  scenes: {
+    orderBy: { orderIndex: "asc" },
+    include: {
+      panels: {
+        orderBy: { orderIndex: "asc" },
+        include: {
+          scene: { select: { id: true, orderIndex: true, title: true } },
+          selectedImageAsset: true,
+          selectedVideoAsset: true,
+          selectedAudioAsset: true,
+          firstFrameAsset: true,
+          lastFrameAsset: true
+        }
+      }
+    }
+  }
+} satisfies Prisma.ProjectInclude;
+
+function orderedPanels(project: NonNullable<Awaited<ReturnType<typeof loadProjectForExport>>>) {
+  return project.scenes.flatMap((scene) => scene.panels) as unknown as PanelForExport[];
+}
+
+function textEntry(path: string, text: string): ZipEntry {
+  return {
+    path,
+    bytes: encodeText(text)
+  };
+}
+
+function encodeText(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function extensionForAsset(asset: SelectedAsset) {
+  if (asset.mimeType === "image/svg+xml") return ".svg";
+  if (asset.mimeType === "image/png") return ".png";
+  if (asset.mimeType === "image/jpeg") return ".jpg";
+  if (asset.mimeType === "video/mp4") return ".mp4";
+  if (asset.mimeType === "audio/mpeg") return ".mp3";
+  if (asset.mimeType === "audio/wav") return ".wav";
+  if (asset.mimeType === "application/json") return ".json";
+  if (asset.mimeType === "text/csv") return ".csv";
+  return ".bin";
+}
+
+function staleWarnings(value: Prisma.JsonValue) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+
+  return Object.entries(value)
+    .filter(([, flag]) => Boolean(flag))
+    .map(([key, flag]) => typeof flag === "string" ? `${key}: ${flag}` : key);
+}
+
+function jsonStringArray(value: Prisma.JsonValue) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function csvCell(value: unknown) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replaceAll("\"", "\"\"")}"` : text;
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60) || "untitled";
+}
+
+function timestampSlug(date: Date) {
+  return date.toISOString().slice(0, 16).replace(/[-:T]/g, "");
+}

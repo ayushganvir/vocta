@@ -1,10 +1,12 @@
 import { AppShell } from "@/components/workspace/app-shell";
-import { WorkspaceRoute } from "@/components/workspace/screens";
+import { ExportWorkspace } from "@/features/export/export-workspace";
+
+export const dynamic = "force-dynamic";
 
 export default function ExportPage() {
   return (
     <AppShell activeScreen="export">
-      <WorkspaceRoute screen="export" />
+      <ExportWorkspace />
     </AppShell>
   );
 }

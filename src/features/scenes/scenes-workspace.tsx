@@ -25,8 +25,46 @@ type Panel = {
   notes: string | null;
   mappedEntityIds: string[];
   panelReferenceAssetIds: string[];
+  firstFrameAssetId: string | null;
+  lastFrameAssetId: string | null;
+  selectedImageAssetId: string | null;
+  selectedVideoAssetId: string | null;
+  selectedAudioAssetId: string | null;
   promptFields: PromptFields;
+  generatedAssets: GeneratedAsset[];
+  generationJobs: GenerationJob[];
   updatedAt: string;
+};
+
+type GeneratedAsset = {
+  id: string;
+  assetType: "IMAGE" | "VIDEO" | "AUDIO" | "REFERENCE" | "FILE";
+  fileUrl: string;
+  previewUrl: string | null;
+  mimeType: string;
+  durationSeconds: number | null;
+  width: number | null;
+  height: number | null;
+  isSelected: boolean;
+  metadata: Record<string, unknown>;
+  generationJobId: string | null;
+  createdAt: string;
+};
+
+type GenerationJob = {
+  id: string;
+  type: string;
+  provider: string;
+  model: string;
+  status: string;
+  compiledPrompt: string | null;
+  requestPayload: unknown;
+  responsePayloadSummary: unknown;
+  logs: unknown;
+  errorPayload: unknown;
+  durationMs: number | null;
+  createdAt: string;
+  completedAt: string | null;
 };
 
 type Scene = {
@@ -87,6 +125,12 @@ export function ScenesWorkspace() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [promptDraft, setPromptDraft] = useState<Partial<Draft> | null>(null);
   const [promptDraftRationale, setPromptDraftRationale] = useState<string[]>([]);
+  const [audioOptions, setAudioOptions] = useState({
+    voiceId: "",
+    pace: "normal",
+    emotion: "",
+    format: "wav"
+  });
   const [status, setStatus] = useState("Loading scenes...");
   const [isBusy, setIsBusy] = useState(false);
 
@@ -329,6 +373,88 @@ export function ScenesWorkspace() {
     setIsBusy(false);
   }
 
+  async function generateImage(frameRole: "image" | "first_frame" | "last_frame") {
+    if (!selectedPanel) {
+      return;
+    }
+
+    await runGeneration("/api/generation/image", {
+      panelId: selectedPanel.id,
+      frameRole
+    }, frameRole === "image" ? "Image generated and selected." : `${frameRole.replace("_", " ")} generated and selected.`);
+  }
+
+  async function generateVideo() {
+    if (!selectedPanel) {
+      return;
+    }
+
+    await runGeneration("/api/generation/video", {
+      panelId: selectedPanel.id,
+      durationSeconds: selectedPanel.targetDurationSeconds
+    }, "Video generated and selected.");
+  }
+
+  async function generateAudio() {
+    if (!selectedPanel) {
+      return;
+    }
+
+    await runGeneration("/api/generation/audio", {
+      panelId: selectedPanel.id,
+      voiceId: audioOptions.voiceId || null,
+      pace: audioOptions.pace,
+      emotion: audioOptions.emotion || null,
+      format: audioOptions.format
+    }, "Voiceover generated and selected.");
+  }
+
+  async function runGeneration(endpoint: string, payload: Record<string, unknown>, successMessage: string) {
+    setIsBusy(true);
+    setStatus("Generation job running...");
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = (await response.json()) as { panel?: Panel; error?: string };
+
+    if (data.panel) {
+      updatePanel(data.panel);
+      setStatus(successMessage);
+    } else {
+      setStatus(data.error ?? "Generation failed.");
+    }
+
+    setIsBusy(false);
+  }
+
+  async function selectAsset(assetId: string) {
+    if (!selectedPanel) {
+      return;
+    }
+
+    setIsBusy(true);
+    const response = await fetch("/api/assets/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        panelId: selectedPanel.id,
+        assetId
+      })
+    });
+    const data = (await response.json()) as { panel?: Panel; error?: string };
+
+    if (data.panel) {
+      updatePanel(data.panel);
+      setStatus("Asset selection updated.");
+    } else {
+      setStatus(data.error ?? "Asset selection failed.");
+    }
+
+    setIsBusy(false);
+  }
+
   function applyPromptDraftField(field: keyof Draft) {
     if (!promptDraft?.[field]) {
       return;
@@ -472,17 +598,50 @@ export function ScenesWorkspace() {
         </div>
 
         <div className={styles.manualActions}>
-          <button type="button" disabled={!hasPrompt}>
+          <button type="button" onClick={() => generateImage("image")} disabled={isBusy || !selectedPanel || !hasPrompt}>
             Generate image
           </button>
-          <button type="button" disabled={!hasPrompt}>
+          <button type="button" onClick={() => generateImage("first_frame")} disabled={isBusy || !selectedPanel || !hasPrompt}>
+            Generate first frame
+          </button>
+          <button type="button" onClick={() => generateImage("last_frame")} disabled={isBusy || !selectedPanel || !hasPrompt}>
+            Generate last frame
+          </button>
+          <button type="button" onClick={generateVideo} disabled={isBusy || !selectedPanel || !hasPrompt}>
             Generate video
           </button>
-          <button type="button" disabled={!hasPrompt}>
+          <button type="button" onClick={generateAudio} disabled={isBusy || !selectedPanel || !hasPrompt}>
             Generate voice
           </button>
           <span>{status}</span>
         </div>
+
+        <div className={styles.voiceControls}>
+          <Field label="Voice ID" value={audioOptions.voiceId} onChange={(voiceId) => setAudioOptions((current) => ({ ...current, voiceId }))} />
+          <label className={styles.field}>
+            <span>Pace</span>
+            <select value={audioOptions.pace} onChange={(event) => setAudioOptions((current) => ({ ...current, pace: event.target.value }))}>
+              <option value="slow">slow</option>
+              <option value="normal">normal</option>
+              <option value="fast">fast</option>
+            </select>
+          </label>
+          <Field label="Emotion" value={audioOptions.emotion} onChange={(emotion) => setAudioOptions((current) => ({ ...current, emotion }))} />
+          <label className={styles.field}>
+            <span>Format</span>
+            <select value={audioOptions.format} onChange={(event) => setAudioOptions((current) => ({ ...current, format: event.target.value }))}>
+              <option value="wav">wav</option>
+              <option value="mp3">mp3</option>
+            </select>
+          </label>
+        </div>
+
+        {selectedPanel ? (
+          <>
+            <AssetHistory panel={selectedPanel} onSelectAsset={selectAsset} isBusy={isBusy} />
+            <DebugInspector jobs={selectedPanel.generationJobs} />
+          </>
+        ) : null}
 
         {promptDraft ? (
           <div className={styles.warningBar} role="status">
@@ -511,6 +670,102 @@ export function ScenesWorkspace() {
   function setDraftField(field: keyof Draft, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
   }
+}
+
+function AssetHistory({
+  panel,
+  onSelectAsset,
+  isBusy
+}: {
+  panel: Panel;
+  onSelectAsset: (assetId: string) => void;
+  isBusy: boolean;
+}) {
+  const assets = panel.generatedAssets ?? [];
+
+  return (
+    <section className={styles.assetSection}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <p>Asset history</p>
+          <h4>Generated candidates</h4>
+        </div>
+        <span>{assets.length} total</span>
+      </div>
+      {assets.length ? (
+        <div className={styles.assetGrid}>
+          {assets.map((asset) => (
+            <article key={asset.id} className={styles.assetCard}>
+              {asset.assetType === "IMAGE" ? (
+                <img src={asset.previewUrl ?? asset.fileUrl} alt="" />
+              ) : (
+                <div className={styles.assetPlaceholder}>{asset.assetType}</div>
+              )}
+              <div>
+                <strong>{asset.assetType.toLowerCase()}</strong>
+                <span>{asset.isSelected ? "selected" : "not selected"}</span>
+                <small>{asset.durationSeconds ? `${asset.durationSeconds}s` : asset.mimeType}</small>
+                <small>{frameLabel(asset)}</small>
+                {canSelectAsset(asset) ? (
+                  <button type="button" onClick={() => onSelectAsset(asset.id)} disabled={isBusy || asset.isSelected}>
+                    {asset.isSelected ? "Selected" : "Select"}
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className={styles.emptyState}>No generated assets yet.</p>
+      )}
+    </section>
+  );
+}
+
+function DebugInspector({ jobs }: { jobs: GenerationJob[] }) {
+  return (
+    <section className={styles.debugSection}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <p>Debug inspector</p>
+          <h4>Recent generation jobs</h4>
+        </div>
+        <span>{jobs.length} shown</span>
+      </div>
+      {jobs.length ? (
+        <div className={styles.jobList}>
+          {jobs.map((job) => (
+            <details key={job.id} className={styles.jobCard}>
+              <summary>
+                <strong>{job.type}</strong>
+                <span>{job.status}</span>
+                <small>{job.provider}/{job.model}</small>
+              </summary>
+              <pre>{job.compiledPrompt ?? "No compiled prompt stored."}</pre>
+              <pre>{JSON.stringify({
+                requestPayload: job.requestPayload,
+                responsePayloadSummary: job.responsePayloadSummary,
+                logs: job.logs,
+                errorPayload: job.errorPayload,
+                durationMs: job.durationMs
+              }, null, 2)}</pre>
+            </details>
+          ))}
+        </div>
+      ) : (
+        <p className={styles.emptyState}>No generation jobs yet.</p>
+      )}
+    </section>
+  );
+}
+
+function frameLabel(asset: GeneratedAsset) {
+  const frameRole = asset.metadata?.frameRole;
+  return typeof frameRole === "string" ? frameRole.replace("_", " ") : "candidate";
+}
+
+function canSelectAsset(asset: GeneratedAsset) {
+  return asset.assetType === "IMAGE" || asset.assetType === "VIDEO" || asset.assetType === "AUDIO";
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

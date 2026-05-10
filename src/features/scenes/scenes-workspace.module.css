@@ -203,6 +203,7 @@
 }
 
 .field input,
+.field select,
 .area textarea {
   width: 100%;
   min-width: 0;
@@ -212,7 +213,8 @@
   outline: none;
 }
 
-.field input {
+.field input,
+.field select {
   min-height: 34px;
   padding: 7px 9px;
 }
@@ -225,6 +227,7 @@
 }
 
 .field input:focus,
+.field select:focus,
 .area textarea:focus {
   border-color: var(--accent);
 }
@@ -244,12 +247,168 @@
   font-size: 12px;
 }
 
+.voiceControls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.assetSection,
+.debugSection {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sectionHeader p {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.sectionHeader h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.sectionHeader span,
+.emptyState {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assetGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.assetCard {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.assetCard img,
+.assetPlaceholder {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  background: #111827;
+}
+
+.assetPlaceholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assetCard div {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+}
+
+.assetCard strong {
+  font-size: 13px;
+}
+
+.assetCard span,
+.assetCard small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assetCard button {
+  min-height: 30px;
+  margin-top: 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.assetCard button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.jobList {
+  display: grid;
+  gap: 8px;
+}
+
+.jobCard {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.jobCard summary {
+  display: grid;
+  grid-template-columns: 90px 90px minmax(0, 1fr);
+  gap: 8px;
+  padding: 9px;
+  cursor: pointer;
+}
+
+.jobCard summary strong,
+.jobCard summary span,
+.jobCard summary small {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobCard summary span {
+  color: var(--accent-strong);
+}
+
+.jobCard summary small {
+  color: var(--muted);
+}
+
+.jobCard pre {
+  overflow: auto;
+  max-height: 260px;
+  margin: 0;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 1100px) {
   .workspace {
     grid-template-columns: 1fr;
   }
 
   .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .voiceControls,
+  .assetGrid {
     grid-template-columns: 1fr;
   }
 

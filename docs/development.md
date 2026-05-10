@@ -77,8 +77,12 @@ At this scaffold stage, `lint` delegates to `typecheck` to keep the command non-
 
 ## Current Scope
 
-Wave 1 foundation is integrated. Product behavior remains scaffolded:
+Wave 4 core generation is integrated:
 
-1. Prisma data model, repository helpers, and a seeded demo project.
-2. App shell and placeholder workspace screens.
-3. BullMQ queue contracts, worker shell, fake providers, and local storage.
+1. Project, source material, Style Bible, entities, scenes, panels, and prompt compilation are backed by Prisma APIs.
+2. AI drafting exists for story analysis, entity extraction/mapping, Style Bible drafts, and panel prompt enhancement; drafts require explicit apply/save actions.
+3. Panel detail supports manual fake-provider image, first-frame, last-frame, video, and audio generation.
+4. Generated assets are stored through the local storage driver, preserved in panel history, and selected manually or by the explicit generation action.
+5. Panel debug inspector exposes recent generation jobs, compiled prompts, request payloads, response summaries, logs, errors, provider/model, and timing.
+
+Real provider adapters, export ZIP/manifest generation, stale-state propagation, and queue-backed asynchronous execution are still planned work.

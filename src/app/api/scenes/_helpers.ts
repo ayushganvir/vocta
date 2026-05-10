@@ -49,10 +49,49 @@ export function serializePanel(panel: {
   notes: string | null;
   mappedEntityIds: Prisma.JsonValue;
   panelReferenceAssetIds: Prisma.JsonValue;
+  firstFrameAssetId?: string | null;
+  lastFrameAssetId?: string | null;
+  selectedImageAssetId?: string | null;
+  selectedVideoAssetId?: string | null;
+  selectedAudioAssetId?: string | null;
   timelineMetadata: Prisma.JsonValue;
   staleState: Prisma.JsonValue;
   createdAt: Date;
   updatedAt: Date;
+  generatedAssets?: Array<{
+    id: string;
+    assetType: string;
+    fileUrl: string;
+    previewUrl: string | null;
+    storagePath: string;
+    mimeType: string;
+    durationSeconds: number | null;
+    width: number | null;
+    height: number | null;
+    isSelected: boolean;
+    metadata: Prisma.JsonValue;
+    generationJobId: string | null;
+    createdAt: Date;
+  }>;
+  generationJobs?: Array<{
+    id: string;
+    type: string;
+    provider: string;
+    model: string;
+    status: string;
+    inputLayers: Prisma.JsonValue;
+    attachedReferenceAssetIds: Prisma.JsonValue;
+    compiledPrompt: string | null;
+    requestPayload: Prisma.JsonValue;
+    responsePayloadSummary: Prisma.JsonValue;
+    outputAssetIds: Prisma.JsonValue;
+    logs: Prisma.JsonValue;
+    errorPayload: Prisma.JsonValue | null;
+    durationMs: number | null;
+    createdAt: Date;
+    startedAt: Date | null;
+    completedAt: Date | null;
+  }>;
 }) {
   const metadata = isJsonObject(panel.timelineMetadata) ? panel.timelineMetadata : {};
 
@@ -70,10 +109,57 @@ export function serializePanel(panel: {
     notes: panel.notes,
     mappedEntityIds: jsonStringArray(panel.mappedEntityIds),
     panelReferenceAssetIds: jsonStringArray(panel.panelReferenceAssetIds),
+    firstFrameAssetId: panel.firstFrameAssetId ?? null,
+    lastFrameAssetId: panel.lastFrameAssetId ?? null,
+    selectedImageAssetId: panel.selectedImageAssetId ?? null,
+    selectedVideoAssetId: panel.selectedVideoAssetId ?? null,
+    selectedAudioAssetId: panel.selectedAudioAssetId ?? null,
     promptFields: isJsonObject(metadata.promptFields) ? metadata.promptFields : {},
     staleState: panel.staleState,
+    generatedAssets: panel.generatedAssets?.map(serializeGeneratedAsset) ?? [],
+    generationJobs: panel.generationJobs?.map(serializeGenerationJob) ?? [],
     createdAt: panel.createdAt.toISOString(),
     updatedAt: panel.updatedAt.toISOString()
+  };
+}
+
+function serializeGeneratedAsset(asset: NonNullable<Parameters<typeof serializePanel>[0]["generatedAssets"]>[number]) {
+  return {
+    id: asset.id,
+    assetType: asset.assetType,
+    fileUrl: asset.fileUrl,
+    previewUrl: asset.previewUrl,
+    storagePath: asset.storagePath,
+    mimeType: asset.mimeType,
+    durationSeconds: asset.durationSeconds,
+    width: asset.width,
+    height: asset.height,
+    isSelected: asset.isSelected,
+    metadata: asset.metadata,
+    generationJobId: asset.generationJobId,
+    createdAt: asset.createdAt.toISOString()
+  };
+}
+
+function serializeGenerationJob(job: NonNullable<Parameters<typeof serializePanel>[0]["generationJobs"]>[number]) {
+  return {
+    id: job.id,
+    type: job.type,
+    provider: job.provider,
+    model: job.model,
+    status: job.status,
+    inputLayers: job.inputLayers,
+    attachedReferenceAssetIds: job.attachedReferenceAssetIds,
+    compiledPrompt: job.compiledPrompt,
+    requestPayload: job.requestPayload,
+    responsePayloadSummary: job.responsePayloadSummary,
+    outputAssetIds: job.outputAssetIds,
+    logs: job.logs,
+    errorPayload: job.errorPayload,
+    durationMs: job.durationMs,
+    createdAt: job.createdAt.toISOString(),
+    startedAt: job.startedAt?.toISOString() ?? null,
+    completedAt: job.completedAt?.toISOString() ?? null
   };
 }
 
@@ -159,7 +245,11 @@ export async function reorderPanelsInTransaction(
 
   return tx.panel.findMany({
     where: { sceneId },
-    orderBy: { orderIndex: "asc" }
+    orderBy: { orderIndex: "asc" },
+    include: {
+      generatedAssets: { orderBy: { createdAt: "desc" } },
+      generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
+    }
   });
 }
 

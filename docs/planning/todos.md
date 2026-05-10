@@ -323,8 +323,9 @@ Legend:
 
 ## Phase 9: Generation and Asset Selection
 
-- [ ] [P0] [Backend] Implement single-candidate image generation
+- [x] [P0] [Backend] Implement single-candidate image generation
   - Source: Questionnaire section 12
+  - Implemented: Wave 4 added manual image generation API, layered prompt compilation, fake provider storage, selected-image update, asset history preservation, and service tests.
   - Acceptance:
     - One image is generated per click.
     - Entity references and panel references are attached.
@@ -333,6 +334,7 @@ Legend:
 
 - [ ] [P0] [Backend] Implement optional first/last frame generation
   - Source: Questionnaire sections 12, 14
+  - Progress: Wave 4 added explicit first-frame and last-frame generation actions with separate selected asset IDs. Keep open until export inclusion is implemented.
   - Acceptance:
     - User can generate first frame and last frame assets.
     - Each role can have one selected asset.
@@ -340,14 +342,16 @@ Legend:
 
 - [ ] [P0] [Backend] Implement video generation
   - Source: Questionnaire section 12
+  - Progress: Wave 4 added manual fake-provider video generation API using compiled panel prompts plus selected image/frame references. Keep open for real provider capability handling and duration estimation.
   - Acceptance:
     - Video generation can run without mandatory video input if provider supports prompt-only.
     - Uses selected image/first-last/motion prompt/entity references when available and supported.
     - Default duration is derived from narration/script estimate where practical.
     - Generated video becomes selected by default if video export remains selected.
 
-- [ ] [P0] [Frontend] Build asset history and selection UI
+- [x] [P0] [Frontend] Build asset history and selection UI
   - Source: Questionnaire section 14
+  - Implemented: Wave 4 added panel asset history cards, selected/not selected badges, preview for images, and manual select action for image/video/audio assets.
   - Acceptance:
     - Panel shows current selected image/audio/first/last frame and any selected video if used.
     - Asset state is selected/not selected only.
@@ -372,6 +376,7 @@ Legend:
 
 - [ ] [P0] [Backend] Implement audio generation
   - Source: Questionnaire section 13
+  - Progress: Wave 4 added manual fake-provider audio generation API with pace, emotion, WAV/MP3, duration metadata, and selected-audio update. Keep open for the real Google Voice/TTS adapter.
   - Acceptance:
     - Uses Google Voice/TTS provider adapter.
     - Supports pace as slow/normal/fast plus tone/emotion free text.
@@ -395,6 +400,7 @@ Legend:
 
 - [ ] [P0] [Frontend] Build debug inspector UI
   - Source: Questionnaire section 16
+  - Progress: Wave 4 added panel-level recent job inspector showing compiled prompt, request payload, response summary, logs, errors, status, provider/model, and duration. Keep open for token/cost/layer breakdown polish.
   - Acceptance:
     - User can inspect final prompt, layers, references, provider/model, request payload, response summary, error payload, logs, token usage, cost estimate, generation time.
     - Provider request ID is optional.

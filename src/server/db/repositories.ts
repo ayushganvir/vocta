@@ -191,7 +191,13 @@ export async function listScenesWithPanels(db: DbClient, projectId: string) {
     where: { projectId },
     orderBy: { orderIndex: "asc" },
     include: {
-      panels: { orderBy: { orderIndex: "asc" } }
+      panels: {
+        orderBy: { orderIndex: "asc" },
+        include: {
+          generatedAssets: { orderBy: { createdAt: "desc" } },
+          generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
+        }
+      }
     }
   });
 }
@@ -259,7 +265,11 @@ export async function reorderScenePanels(
 export async function listPanels(db: DbClient, sceneId: string) {
   return db.panel.findMany({
     where: { sceneId },
-    orderBy: { orderIndex: "asc" }
+    orderBy: { orderIndex: "asc" },
+    include: {
+      generatedAssets: { orderBy: { createdAt: "desc" } },
+      generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
+    }
   });
 }
 

@@ -17,7 +17,13 @@ type RouteContext = {
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   const { panelId } = await context.params;
-  const panel = await prisma.panel.findUnique({ where: { id: panelId } });
+  const panel = await prisma.panel.findUnique({
+    where: { id: panelId },
+    include: {
+      generatedAssets: { orderBy: { createdAt: "desc" } },
+      generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
+    }
+  });
 
   if (!panel) {
     return notFound("Panel not found.");
@@ -42,9 +48,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       data.timelineMetadata = mergePromptFields(current.timelineMetadata, parsed.data.promptFields);
     }
 
-    const panel = await prisma.panel.update({
+    await prisma.panel.update({
       where: { id: panelId },
       data
+    });
+    const panel = await prisma.panel.findUniqueOrThrow({
+      where: { id: panelId },
+      include: {
+        generatedAssets: { orderBy: { createdAt: "desc" } },
+        generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
+      }
     });
 
     return NextResponse.json({ panel: serializePanel(panel) });

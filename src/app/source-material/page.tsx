@@ -2,6 +2,7 @@ import { AppShell } from "@/components/workspace/app-shell";
 import { listSourceMaterials, prisma } from "@/server/db";
 import { SourceMaterialWorkspace } from "@/features/source-material/source-material-workspace";
 import { getWorkspaceContext } from "@/features/projects/workspace-context";
+import { listStoryAnalysisDrafts } from "@/server/ai/story-analysis/draft";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function SourceMaterialPage({ searchParams }: SourceMateria
     projects.find((project) => project.status === "DRAFT") ??
     projects[0];
   const sourceMaterials = selectedProject ? await listSourceMaterials(prisma, selectedProject.id) : [];
+  const storyAnalysisDrafts = selectedProject ? await listStoryAnalysisDrafts(prisma, selectedProject.id) : [];
 
   return (
     <AppShell activeScreen="source-material">
@@ -50,6 +52,7 @@ export default async function SourceMaterialPage({ searchParams }: SourceMateria
               }
             : null
         }))}
+        initialStoryAnalysisDrafts={storyAnalysisDrafts}
       />
     </AppShell>
   );

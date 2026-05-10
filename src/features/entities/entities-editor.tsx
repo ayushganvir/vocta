@@ -22,6 +22,40 @@ type EntityFormState = {
   voiceNotes: string;
 };
 
+type ExtractionDraftEntity = {
+  draftId: string;
+  name: string;
+  type: string;
+  description: string;
+  visualPromptBlock: string | null;
+  duplicateOfEntityId: string | null;
+  duplicateReason: string | null;
+  rationale: string;
+  sourceTextSnippets: string[];
+  metadata: {
+    speakerOnly: boolean;
+    confidence: number;
+  };
+};
+
+type ExtractionDraft = {
+  generationJobId: string;
+  draftEntities: ExtractionDraftEntity[];
+};
+
+type MappingSuggestion = {
+  panelId: string;
+  suggestedEntityIds: string[];
+  confidence: number;
+  rationale: string;
+  missingReferenceWarnings: string[];
+};
+
+type MappingDraft = {
+  generationJobId: string;
+  mappings: MappingSuggestion[];
+};
+
 const emptyForm: EntityFormState = {
   id: null,
   name: "",
@@ -39,12 +73,17 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
   const [entities, setEntities] = useState(initialEntities);
   const [formState, setFormState] = useState<EntityFormState>(emptyForm);
   const [status, setStatus] = useState("Visual entities without a reference will hard-warn before generation.");
+  const [extractionText, setExtractionText] = useState("");
+  const [extractionDraft, setExtractionDraft] = useState<ExtractionDraft | null>(null);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
+  const [mappingDraft, setMappingDraft] = useState<MappingDraft | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const referenceWarnings = useMemo(
     () => entities.filter((entity) => getReferenceWarning(entity)).length,
     [entities]
   );
+  const entityNameById = useMemo(() => new Map(entities.map((entity) => [entity.id, entity.name])), [entities]);
 
   if (!project) {
     return (
@@ -156,6 +195,126 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
       if (formState.id === entity.id) {
         resetForm();
       }
+    });
+  }
+
+  function draftEntityExtraction() {
+    startTransition(async () => {
+      const response = await fetch("/api/entity-extraction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: activeProject.id,
+          text: extractionText
+        })
+      });
+      const payload = (await response.json()) as { draft?: ExtractionDraft; error?: string };
+
+      if (!response.ok || !payload.draft) {
+        setStatus(payload.error ?? "Entity extraction failed.");
+        return;
+      }
+
+      setExtractionDraft(payload.draft);
+      setSelectedDraftIds(
+        new Set(
+          payload.draft.draftEntities
+            .filter((draft) => !draft.duplicateOfEntityId)
+            .map((draft) => draft.draftId)
+        )
+      );
+      setStatus("Entity extraction draft ready. Nothing was applied.");
+    });
+  }
+
+  function toggleDraftEntity(draftId: string) {
+    setSelectedDraftIds((current) => {
+      const next = new Set(current);
+      if (next.has(draftId)) {
+        next.delete(draftId);
+      } else {
+        next.add(draftId);
+      }
+      return next;
+    });
+  }
+
+  function applySelectedDraftEntities() {
+    if (!extractionDraft) return;
+
+    const draftEntities = extractionDraft.draftEntities.filter((draft) => selectedDraftIds.has(draft.draftId));
+    if (draftEntities.length === 0) {
+      setStatus("Select at least one draft entity to apply.");
+      return;
+    }
+
+    startTransition(async () => {
+      const response = await fetch("/api/entity-extraction/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: activeProject.id,
+          sourceGenerationJobId: extractionDraft.generationJobId,
+          draftEntities
+        })
+      });
+      const payload = (await response.json()) as { entities?: EntityRecord[]; error?: string };
+
+      if (!response.ok || !payload.entities) {
+        setStatus(payload.error ?? "Applying extracted entities failed.");
+        return;
+      }
+
+      const appliedEntities = payload.entities;
+      setEntities((current) =>
+        [...current, ...appliedEntities].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name))
+      );
+      setExtractionDraft(null);
+      setSelectedDraftIds(new Set());
+      setStatus(`Applied ${appliedEntities.length} extracted entity record(s).`);
+    });
+  }
+
+  function draftEntityMappings() {
+    startTransition(async () => {
+      const response = await fetch("/api/entity-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id })
+      });
+      const payload = (await response.json()) as { draft?: MappingDraft; error?: string };
+
+      if (!response.ok || !payload.draft) {
+        setStatus(payload.error ?? "Entity mapping failed.");
+        return;
+      }
+
+      setMappingDraft(payload.draft);
+      setStatus("Entity mapping suggestions ready. Nothing was applied.");
+    });
+  }
+
+  function applyMappingDraft() {
+    if (!mappingDraft) return;
+
+    startTransition(async () => {
+      const response = await fetch("/api/entity-mapping/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: activeProject.id,
+          mappings: mappingDraft.mappings
+        })
+      });
+      const payload = (await response.json()) as { appliedCount?: number; error?: string };
+
+      if (!response.ok) {
+        setStatus(payload.error ?? "Applying mapping suggestions failed.");
+        return;
+      }
+
+      setMappingDraft(null);
+      setStatus(`Applied mappings to ${payload.appliedCount ?? 0} panel(s). Prompt compilation will now use mapped entities.`);
     });
   }
 
@@ -283,6 +442,90 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
             Clear
           </button>
           <span className="compactBadge">{referenceWarnings} reference warning(s)</span>
+        </div>
+      </section>
+
+      <section className="widePanel">
+        <div className="sectionTitle">
+          <h3>Entity Extraction Review</h3>
+          <span>{extractionDraft?.draftEntities.length ?? 0} draft(s)</span>
+        </div>
+        <label className="fieldBlock">
+          <span>Optional source text override</span>
+          <textarea
+            value={extractionText}
+            rows={4}
+            placeholder="Leave blank to use project source material."
+            onChange={(event) => setExtractionText(event.target.value)}
+          />
+        </label>
+        <div className="inlineActions" style={{ margin: "10px 0" }}>
+          <button type="button" onClick={draftEntityExtraction} disabled={isPending}>
+            Draft extraction
+          </button>
+          <button
+            className="primaryButton"
+            type="button"
+            onClick={applySelectedDraftEntities}
+            disabled={isPending || !extractionDraft}
+          >
+            Apply selected
+          </button>
+          <span className="compactBadge">Drafts never auto-create records</span>
+        </div>
+        <div className="entityList">
+          {extractionDraft?.draftEntities.map((draft) => (
+            <article key={draft.draftId} className="entityRow">
+              <label className="entityThumb" aria-label={`Select ${draft.name}`}>
+                <input
+                  type="checkbox"
+                  checked={selectedDraftIds.has(draft.draftId)}
+                  onChange={() => toggleDraftEntity(draft.draftId)}
+                />
+              </label>
+              <div>
+                <strong>{draft.name}</strong>
+                <span>{draft.type}</span>
+              </div>
+              <p>{draft.visualPromptBlock ?? "Speaker/narrator only; no visual prompt required."}</p>
+              <small>
+                {draft.duplicateReason ?? draft.rationale}
+                <br />
+                Confidence {Math.round(draft.metadata.confidence * 100)}%
+              </small>
+            </article>
+          )) ?? <p>No extraction draft yet.</p>}
+        </div>
+      </section>
+
+      <section className="stackPanel">
+        <section className="infoCard">
+          <p className="label">Panel mapping</p>
+          <strong>{mappingDraft ? `${mappingDraft.mappings.length} suggestion(s)` : "No draft"}</strong>
+          <p>Suggestions update panel mapped entity IDs only after explicit apply.</p>
+        </section>
+        <div className="inlineActions">
+          <button type="button" onClick={draftEntityMappings} disabled={isPending || entities.length === 0}>
+            Draft mappings
+          </button>
+          <button className="primaryButton" type="button" onClick={applyMappingDraft} disabled={isPending || !mappingDraft}>
+            Apply mappings
+          </button>
+        </div>
+        <div className="entityList">
+          {mappingDraft?.mappings.map((mapping) => (
+            <article key={mapping.panelId} className="infoCard">
+              <p className="label">{mapping.panelId}</p>
+              <strong>{mapping.suggestedEntityIds.map((id) => entityNameById.get(id) ?? id).join(", ") || "No entity match"}</strong>
+              <p>{mapping.rationale}</p>
+              <small>
+                Confidence {Math.round(mapping.confidence * 100)}%
+                {mapping.missingReferenceWarnings.length > 0
+                  ? ` - ${mapping.missingReferenceWarnings.join(" ")}`
+                  : ""}
+              </small>
+            </article>
+          )) ?? <p>No mapping draft yet.</p>}
         </div>
       </section>
     </div>

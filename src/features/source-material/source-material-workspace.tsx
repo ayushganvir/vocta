@@ -11,17 +11,21 @@ import {
   SCRIPT_TITLE_MAX_LENGTH
 } from "./source-material-validation";
 import type { SourceMaterialItem, SourceMaterialProject } from "./source-material-types";
+import { StoryAnalysisReview } from "@/features/story-analysis/story-analysis-review";
+import type { StoryAnalysisDraftItem } from "@/features/story-analysis/types";
 
 type SourceMaterialWorkspaceProps = {
   projects: SourceMaterialProject[];
   initialProjectId: string;
   initialSourceMaterials: SourceMaterialItem[];
+  initialStoryAnalysisDrafts: StoryAnalysisDraftItem[];
 };
 
 export function SourceMaterialWorkspace({
   projects,
   initialProjectId,
-  initialSourceMaterials
+  initialSourceMaterials,
+  initialStoryAnalysisDrafts
 }: SourceMaterialWorkspaceProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -234,6 +238,12 @@ export function SourceMaterialWorkspace({
           Max image metadata size: {Math.round(IMAGE_REFERENCE_MAX_SIZE_BYTES / 1024 / 1024)} MB. Link fetching and
           media processing are deferred.
         </p>
+
+        <StoryAnalysisReview
+          projectId={projectId}
+          initialDrafts={initialStoryAnalysisDrafts}
+          sourceMaterialIds={scripts.map((script) => script.id)}
+        />
       </aside>
     </div>
   );

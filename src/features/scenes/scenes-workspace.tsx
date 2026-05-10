@@ -85,6 +85,8 @@ export function ScenesWorkspace() {
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [promptDraft, setPromptDraft] = useState<Partial<Draft> | null>(null);
+  const [promptDraftRationale, setPromptDraftRationale] = useState<string[]>([]);
   const [status, setStatus] = useState("Loading scenes...");
   const [isBusy, setIsBusy] = useState(false);
 
@@ -288,6 +290,54 @@ export function ScenesWorkspace() {
     setIsBusy(false);
   }
 
+  async function enhancePrompts() {
+    if (!selectedPanel) {
+      return;
+    }
+
+    setIsBusy(true);
+    const response = await fetch("/api/prompt-enhancement", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ panelId: selectedPanel.id })
+    });
+    const data = (await response.json()) as {
+      draft?: {
+        imagePrompt: string;
+        videoPrompt: string;
+        audioPrompt: string;
+        referenceNotes: string;
+        notes: string;
+      };
+      rationale?: string[];
+      warnings?: string[];
+      error?: string;
+    };
+
+    if (data.draft) {
+      setPromptDraft(data.draft);
+      setPromptDraftRationale(data.rationale ?? []);
+      setStatus(
+        data.warnings?.length
+          ? `Prompt suggestions ready with ${data.warnings.length} warning(s). Apply fields manually.`
+          : "Prompt suggestions ready. Apply fields manually."
+      );
+    } else {
+      setStatus(data.error ?? "Prompt enhancement failed.");
+    }
+
+    setIsBusy(false);
+  }
+
+  function applyPromptDraftField(field: keyof Draft) {
+    if (!promptDraft?.[field]) {
+      return;
+    }
+
+    setDraftField(field, promptDraft[field] ?? "");
+    setStatus(`${field} suggestion applied locally. Click Save to persist.`);
+  }
+
   function updateScenePanels(sceneId: string, panels: Panel[]) {
     setScenes((current) =>
       current.map((scene) => (scene.id === sceneId ? { ...scene, panels } : scene))
@@ -389,6 +439,9 @@ export function ScenesWorkspace() {
             <button type="button" onClick={savePanel} disabled={isBusy || !selectedPanel}>
               Save
             </button>
+            <button type="button" onClick={enhancePrompts} disabled={isBusy || !selectedPanel}>
+              Enhance prompts
+            </button>
           </div>
         </div>
 
@@ -430,6 +483,27 @@ export function ScenesWorkspace() {
           </button>
           <span>{status}</span>
         </div>
+
+        {promptDraft ? (
+          <div className={styles.warningBar} role="status">
+            <strong>Prompt suggestions ready</strong>
+            <span>
+              Apply individual fields, edit them, then click Save. {promptDraftRationale.join(" ")}
+            </span>
+            <button type="button" onClick={() => applyPromptDraftField("imagePrompt")}>
+              Apply image prompt
+            </button>
+            <button type="button" onClick={() => applyPromptDraftField("videoPrompt")}>
+              Apply video prompt
+            </button>
+            <button type="button" onClick={() => applyPromptDraftField("audioPrompt")}>
+              Apply audio prompt
+            </button>
+            <button type="button" onClick={() => applyPromptDraftField("referenceNotes")}>
+              Apply reference notes
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

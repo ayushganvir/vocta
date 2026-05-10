@@ -32,6 +32,8 @@ export function StyleBibleEditor({ project, initialStyleBible }: StyleBibleEdito
     >
   );
   const [status, setStatus] = useState("No generation is blocked by Style Bible gaps in MVP.");
+  const [draft, setDraft] = useState<Record<(typeof styleBibleFields)[number], string> | null>(null);
+  const [draftRationale, setDraftRationale] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const missingFields = useMemo(() => getMissingStyleBibleFields(styleBible), [styleBible]);
@@ -74,6 +76,43 @@ export function StyleBibleEditor({ project, initialStyleBible }: StyleBibleEdito
     });
   }
 
+  function generateDraft() {
+    startTransition(async () => {
+      const response = await fetch("/api/style-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: activeProject.id })
+      });
+
+      if (!response.ok) {
+        setStatus("Style draft failed. No fields were changed.");
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        draft: Record<(typeof styleBibleFields)[number], string>;
+        rationale: string[];
+        warnings: string[];
+      };
+      setDraft(payload.draft);
+      setDraftRationale(payload.rationale);
+      setStatus(
+        payload.warnings.length
+          ? `Draft ready with ${payload.warnings.length} warning(s). Apply fields manually.`
+          : "Draft ready. Apply fields manually."
+      );
+    });
+  }
+
+  function applyDraftField(field: (typeof styleBibleFields)[number]) {
+    if (!draft) {
+      return;
+    }
+
+    setFormState((current) => ({ ...current, [field]: draft[field] }));
+    setStatus(`${fieldLabels[field]} draft applied locally. Click Save Style Bible to persist.`);
+  }
+
   return (
     <div className="workspaceGrid">
       <section className="widePanel">
@@ -94,6 +133,9 @@ export function StyleBibleEditor({ project, initialStyleBible }: StyleBibleEdito
           ))}
         </div>
         <div className="inlineActions" style={{ marginTop: 12 }}>
+          <button className="secondaryButton" type="button" onClick={generateDraft} disabled={isPending}>
+            Generate Style Draft
+          </button>
           <button className="primaryButton" type="button" onClick={saveStyleBible} disabled={isPending}>
             {isPending ? "Saving" : "Save Style Bible"}
           </button>
@@ -110,6 +152,21 @@ export function StyleBibleEditor({ project, initialStyleBible }: StyleBibleEdito
           title="Reference policy"
           text="Entity references carry the hard warning before visual generation, not these global fields."
         />
+        {draft ? (
+          <section className="infoCard">
+            <p className="label">AI draft</p>
+            <strong>Field-by-field apply</strong>
+            <p>Draft values are not saved until you apply a field and then save the Style Bible.</p>
+            <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+              {styleBibleFields.map((field) => (
+                <button key={field} type="button" onClick={() => applyDraftField(field)}>
+                  Apply {fieldLabels[field]}
+                </button>
+              ))}
+            </div>
+            {draftRationale.length ? <p>{draftRationale.join(" ")}</p> : null}
+          </section>
+        ) : null}
         <section className="infoCard">
           <p className="label">Missing fields</p>
           <strong>{missingFields.length === 0 ? "Complete" : `${missingFields.length} warning(s)`}</strong>

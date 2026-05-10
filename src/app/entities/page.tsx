@@ -1,10 +1,15 @@
 import { AppShell } from "@/components/workspace/app-shell";
-import { WorkspaceRoute } from "@/components/workspace/screens";
+import { EntitiesEditor } from "@/features/entities/entities-editor";
+import { getEntitiesPageData } from "@/features/entities/data";
 
-export default function EntitiesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function EntitiesPage() {
+  const { project, entities } = await getEntitiesPageData();
+
   return (
     <AppShell activeScreen="entities">
-      <WorkspaceRoute screen="entities" />
+      <EntitiesEditor project={project} initialEntities={entities} />
     </AppShell>
   );
 }

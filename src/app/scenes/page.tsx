@@ -1,10 +1,12 @@
 import { AppShell } from "@/components/workspace/app-shell";
-import { WorkspaceRoute } from "@/components/workspace/screens";
+import { ScenesWorkspace } from "@/features/scenes/scenes-workspace";
+
+export const dynamic = "force-dynamic";
 
 export default function ScenesPage() {
   return (
     <AppShell activeScreen="scenes">
-      <WorkspaceRoute screen="scenes" />
+      <ScenesWorkspace />
     </AppShell>
   );
 }

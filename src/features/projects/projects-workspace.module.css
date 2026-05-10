@@ -1,0 +1,152 @@
+.workspace {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.sectionTitle {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+
+.sectionTitle h3 {
+  color: var(--foreground);
+  font-size: 14px;
+  margin: 0;
+}
+
+.sectionTitle span,
+.meta,
+.label,
+.helper {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.projectList {
+  display: grid;
+  gap: 8px;
+}
+
+.projectRow {
+  background: #131410;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) 90px 130px 130px;
+  padding: 10px;
+}
+
+.projectRow[data-selected="true"] {
+  border-color: #6c7654;
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.projectRow strong {
+  color: var(--foreground);
+  display: block;
+  font-size: 13px;
+}
+
+.projectRow p {
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.badge {
+  border: 1px solid #5d5435;
+  border-radius: 999px;
+  color: var(--warning);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  justify-content: center;
+  padding: 4px 7px;
+  width: fit-content;
+}
+
+.formStack {
+  display: grid;
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  color: var(--accent);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.field input,
+.field textarea,
+.field select {
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--foreground);
+  min-width: 0;
+  padding: 9px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.button {
+  background: #24251f;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 7px 10px;
+}
+
+.primaryButton {
+  background: #254133;
+  border-color: #477258;
+  color: #e8fff1;
+}
+
+.dangerButton {
+  border-color: #71463f;
+  color: var(--danger);
+}
+
+.message {
+  background: #11120f;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #d8d1c2;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 10px;
+}
+
+@media (max-width: 920px) {
+  .workspace,
+  .projectRow {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,263 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(190px, 0.8fr) minmax(420px, 1.7fr);
+  gap: 12px;
+  min-height: 620px;
+}
+
+.sceneRail,
+.panelRail,
+.detailPane {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.sceneRail,
+.panelRail {
+  padding: 12px;
+}
+
+.detailPane {
+  padding: 14px;
+}
+
+.panelHeader,
+.detailHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panelHeader p,
+.detailHeader p {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.panelHeader h3,
+.detailHeader h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.detailHeader span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.panelHeader button,
+.actionRow button,
+.manualActions button {
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.panelHeader button {
+  width: 48px;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.actionRow button,
+.manualActions button {
+  padding: 0 10px;
+}
+
+.panelHeader button:disabled,
+.actionRow button:disabled,
+.manualActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.sceneList,
+.panelList {
+  display: grid;
+  gap: 8px;
+}
+
+.sceneButton,
+.selectedScene,
+.panelButton,
+.selectedPanel {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sceneButton,
+.selectedScene {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+}
+
+.panelButton,
+.selectedPanel {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+}
+
+.selectedScene,
+.selectedPanel {
+  border-color: var(--accent);
+  background: #1f2a21;
+}
+
+.sceneButton span,
+.selectedScene span,
+.panelButton span,
+.selectedPanel span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sceneButton strong,
+.selectedScene strong,
+.panelButton strong,
+.selectedPanel strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sceneButton small,
+.selectedScene small,
+.panelButton small,
+.selectedPanel small {
+  grid-column: 2;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.warningBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, var(--line));
+  background: #2a261b;
+  padding: 10px 12px;
+}
+
+.warningBar strong {
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.warningBar span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field,
+.area {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field span,
+.area span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field input,
+.area textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--foreground);
+  outline: none;
+}
+
+.field input {
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.area textarea {
+  resize: vertical;
+  min-height: 82px;
+  padding: 9px;
+  line-height: 1.4;
+}
+
+.field input:focus,
+.area textarea:focus {
+  border-color: var(--accent);
+}
+
+.manualActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.manualActions span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailHeader {
+    display: grid;
+  }
+
+  .actionRow {
+    justify-content: flex-start;
+  }
+}

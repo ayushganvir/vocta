@@ -3,6 +3,8 @@ export interface StoredObject {
   url: string;
   sizeBytes: number;
   contentType: string;
+  etag: string;
+  metadata?: Record<string, string>;
 }
 
 export interface StorageDriver {
@@ -10,7 +12,13 @@ export interface StorageDriver {
     path: string;
     bytes: Uint8Array;
     contentType: string;
+    metadata?: Record<string, string>;
   }): Promise<StoredObject>;
+  getObject(path: string): Promise<{
+    path: string;
+    bytes: Uint8Array;
+    contentType?: string;
+  }>;
+  deleteObject(path: string): Promise<void>;
   getPublicUrl(path: string): string;
 }
-

@@ -1,4 +1,32 @@
-const sensitiveKeyPattern = /(api[-_]?key|authorization|auth|token|secret|signedUrl|signature)/i;
+const redacted = "[REDACTED]";
+const redactedUrl = "[REDACTED_URL]";
+
+const sensitiveKeyPattern =
+  /(api[-_]?key|x[-_]?api[-_]?key|authorization|auth[-_]?header|access[-_]?token|refresh[-_]?token|id[-_]?token|token|secret|client[-_]?secret|password|credential|cookie|set[-_]?cookie|signed[-_]?url|signedUrl|signature|private[-_]?key)/i;
+
+const sensitiveQueryParamPattern =
+  /^(x-amz-signature|x-amz-credential|x-amz-security-token|x-goog-signature|x-goog-credential|signature|sig|token|access_token|refresh_token|id_token|client_secret|expires|policy|key-pair-id)$/i;
+
+const secretValuePattern = /\b(bearer|basic)\s+[a-z0-9._~+/=-]+|\bsk-[a-z0-9_-]+/i;
+
+function redactString(value: string) {
+  if (secretValuePattern.test(value)) {
+    return redacted;
+  }
+
+  try {
+    const url = new URL(value);
+    const hasSensitiveQuery = [...url.searchParams.keys()].some((key) => sensitiveQueryParamPattern.test(key));
+
+    if (hasSensitiveQuery) {
+      return redactedUrl;
+    }
+  } catch {
+    // Not a URL.
+  }
+
+  return value;
+}
 
 export function redactPayload<T>(payload: T): T {
   if (Array.isArray(payload)) {
@@ -9,11 +37,14 @@ export function redactPayload<T>(payload: T): T {
     return Object.fromEntries(
       Object.entries(payload).map(([key, value]) => [
         key,
-        sensitiveKeyPattern.test(key) ? "[REDACTED]" : redactPayload(value)
+        sensitiveKeyPattern.test(key) ? redacted : redactPayload(value)
       ])
     ) as T;
   }
 
+  if (typeof payload === "string") {
+    return redactString(payload) as T;
+  }
+
   return payload;
 }
-

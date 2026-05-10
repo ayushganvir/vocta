@@ -1,7 +1,8 @@
-import { Queue } from "bullmq";
+import { Queue, type JobsOptions } from "bullmq";
 import IORedis from "ioredis";
 import { readEnv } from "@/lib/env";
-import { queueNames } from "./config";
+import { getQueueKeyForJobType, queueNames, type QueueKey } from "./config";
+import type { JobPayload, JobResult, JobType } from "./types";
 
 let connection: IORedis | undefined;
 
@@ -15,15 +16,43 @@ export function getRedisConnection() {
   return connection;
 }
 
-export function createQueues() {
+export type VoctaQueue = Queue<JobPayload, JobResult, JobType>;
+export type VoctaQueueMap = Record<QueueKey, VoctaQueue>;
+
+const defaultJobOptions = {
+  attempts: 1,
+  removeOnComplete: false,
+  removeOnFail: false
+} as const satisfies JobsOptions;
+
+export function createQueue(queueKey: QueueKey, redis = getRedisConnection()): VoctaQueue {
+  return new Queue<JobPayload, JobResult, JobType>(queueNames[queueKey], {
+    connection: redis,
+    defaultJobOptions
+  });
+}
+
+export function createQueues(): VoctaQueueMap {
   const redis = getRedisConnection();
 
   return {
-    prompt: new Queue(queueNames.prompt, { connection: redis }),
-    image: new Queue(queueNames.image, { connection: redis }),
-    video: new Queue(queueNames.video, { connection: redis }),
-    audio: new Queue(queueNames.audio, { connection: redis }),
-    export: new Queue(queueNames.export, { connection: redis })
+    prompt: createQueue("prompt", redis),
+    image: createQueue("image", redis),
+    video: createQueue("video", redis),
+    audio: createQueue("audio", redis),
+    export: createQueue("export", redis)
   };
 }
 
+export async function enqueueGenerationJob<TJobType extends JobType>(
+  queues: VoctaQueueMap,
+  payload: JobPayload<TJobType>,
+  options: JobsOptions = {}
+) {
+  const queueKey = getQueueKeyForJobType(payload.jobType);
+  return queues[queueKey].add(payload.jobType, payload, {
+    ...defaultJobOptions,
+    ...options,
+    attempts: options.attempts ?? defaultJobOptions.attempts
+  });
+}

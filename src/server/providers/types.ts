@@ -1,3 +1,5 @@
+import type { JobCostEstimate, JobPayload, JobResult } from "../jobs/types";
+
 export type ProviderKind = "text" | "image" | "video" | "audio";
 
 export type ProviderCapability =
@@ -24,7 +26,7 @@ export interface ProviderRequest {
 }
 
 export interface ProviderAssetOutput {
-  assetType: "image" | "video" | "audio" | "reference";
+  assetType: "image" | "video" | "audio" | "reference" | "export";
   fileName: string;
   mimeType: string;
   bytes?: Uint8Array;
@@ -40,12 +42,34 @@ export interface ProviderResponse {
   costEstimateUsd?: number;
 }
 
-export interface ProviderAdapter {
+export interface ProviderValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ProviderBuiltRequest {
+  url: string;
+  method: "GET" | "POST";
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProviderAdapter<
+  TInput extends JobPayload = JobPayload,
+  TBuiltRequest extends ProviderBuiltRequest = ProviderBuiltRequest,
+  TRawResponse = unknown,
+  TResult extends JobResult = JobResult
+> {
   provider: string;
   model: string;
   kind: ProviderKind;
   capabilities: ProviderCapability[];
-  execute(request: ProviderRequest): Promise<ProviderResponse>;
+  validateInput(input: TInput): ProviderValidationResult;
+  buildRequest(input: TInput): TBuiltRequest;
+  execute(request: TBuiltRequest): Promise<TRawResponse>;
+  parseResponse(response: TRawResponse, request: TBuiltRequest): Promise<TResult> | TResult;
+  estimateCost(input: TInput): JobCostEstimate;
   redactPayload(payload: unknown): unknown;
 }
-

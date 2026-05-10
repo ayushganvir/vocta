@@ -1,31 +1,25 @@
-import { Worker } from "bullmq";
-import { defaultConcurrency, queueNames } from "./config";
+import { Worker, type Job } from "bullmq";
+import { createFakeProviderForJob, runProvider } from "../providers/fake";
+import { getQueueConcurrency, queueNames, type QueueKey } from "./config";
 import { getRedisConnection } from "./queues";
+import type { JobPayload, JobResult, JobType } from "./types";
 
 const connection = getRedisConnection();
+const concurrency = getQueueConcurrency();
 
-const workers = [
-  new Worker(queueNames.prompt, async (job) => job.data, {
+async function processJob(job: Job<JobPayload, JobResult, JobType>): Promise<JobResult> {
+  const provider = createFakeProviderForJob(job.data.jobType);
+  return runProvider(provider, job.data);
+}
+
+function createWorker(queueKey: QueueKey) {
+  return new Worker<JobPayload, JobResult, JobType>(queueNames[queueKey], processJob, {
     connection,
-    concurrency: defaultConcurrency.prompt
-  }),
-  new Worker(queueNames.image, async (job) => job.data, {
-    connection,
-    concurrency: defaultConcurrency.image
-  }),
-  new Worker(queueNames.video, async (job) => job.data, {
-    connection,
-    concurrency: defaultConcurrency.video
-  }),
-  new Worker(queueNames.audio, async (job) => job.data, {
-    connection,
-    concurrency: defaultConcurrency.audio
-  }),
-  new Worker(queueNames.export, async (job) => job.data, {
-    connection,
-    concurrency: defaultConcurrency.export
-  })
-];
+    concurrency: concurrency[queueKey]
+  });
+}
+
+const workers = (Object.keys(queueNames) as QueueKey[]).map(createWorker);
 
 for (const worker of workers) {
   worker.on("failed", (job, error) => {
@@ -34,4 +28,3 @@ for (const worker of workers) {
 }
 
 console.log("Vocta workers started", workers.map((worker) => worker.name));
-

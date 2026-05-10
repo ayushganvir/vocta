@@ -80,7 +80,7 @@ describe("provider health checks", () => {
 
     const result = await checkProviderHealth({
       provider: "openai",
-      kind: "text",
+      kind: "image",
       live: true
     });
 
@@ -89,6 +89,40 @@ describe("provider health checks", () => {
     expect(result.credentialStatus).toBe("configured");
     expect(result.error).toContain("Live health check is unsupported");
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("supports explicit low-cost live OpenAI text smoke checks", async () => {
+    process.env.OPENAI_API_KEY = "sk-health-check";
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({
+      id: "resp_health",
+      output_text: "ok",
+      usage: {
+        input_tokens: 12,
+        output_tokens: 1
+      }
+    })));
+
+    const result = await checkProviderHealth({
+      provider: "openai",
+      kind: "text",
+      model: "gpt-4.1-nano",
+      live: true
+    });
+
+    const request = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse(String(request[1]?.body)) as { max_output_tokens: number };
+
+    expect(result.status).toBe("ok");
+    expect(result.mode).toBe("live");
+    expect(result.costLabel).toBe("lowest_possible");
+    expect(result.riskLabel).toBe("external_call_low_cost");
+    expect(result.responseSummary).toMatchObject({
+      provider: "openai",
+      model: "gpt-4.1-nano",
+      compiledPrompt: "ok"
+    });
+    expect(body.max_output_tokens).toBe(8);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("supports live fake checks locally", async () => {

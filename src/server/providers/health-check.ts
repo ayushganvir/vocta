@@ -1,4 +1,5 @@
 import type {
+  BaseJobResult,
   AudioJobPayload,
   ImageJobPayload,
   JobPayload,
@@ -39,8 +40,9 @@ export interface ProviderHealthCheckResult {
   adapterStatus: ProviderHealthAdapterStatus;
   requestPreview: unknown;
   costLabel: "none" | "lowest_possible" | "unknown";
-  riskLabel: "no_external_call" | "local_only" | "external_call_unsupported";
+  riskLabel: "no_external_call" | "local_only" | "external_call_low_cost" | "external_call_unsupported";
   notes: string[];
+  responseSummary?: Record<string, unknown>;
   error?: string;
 }
 
@@ -157,7 +159,7 @@ export async function checkProviderHealth(input: ProviderHealthCheckInput): Prom
     };
   }
 
-  if (provider !== "fake") {
+  if (provider !== "fake" && !supportsLiveHealthCheck(provider, kind)) {
     notes.push("Live health checks for real providers are not implemented; no external call was made.");
 
     return {
@@ -177,8 +179,14 @@ export async function checkProviderHealth(input: ProviderHealthCheckInput): Prom
   }
 
   try {
-    await adapter.execute(request);
-    notes.push("Live fake health check executed locally without external calls or persistence.");
+    const rawResponse = await adapter.execute(request);
+    const parsedResult = await adapter.parseResponse(rawResponse, request) as BaseJobResult<typeof payload.jobType>;
+    const isFakeProvider = provider === "fake";
+    notes.push(
+      isFakeProvider
+        ? "Live fake health check executed locally without external calls or persistence."
+        : "Live OpenAI text smoke check made one external Responses API call with max_output_tokens=8. No generation jobs or assets were created."
+    );
 
     return {
       status: "ok",
@@ -189,9 +197,10 @@ export async function checkProviderHealth(input: ProviderHealthCheckInput): Prom
       credentialStatus,
       adapterStatus: "available",
       requestPreview,
-      costLabel: "none",
-      riskLabel: "local_only",
-      notes
+      costLabel: isFakeProvider ? "none" : "lowest_possible",
+      riskLabel: isFakeProvider ? "local_only" : "external_call_low_cost",
+      notes,
+      responseSummary: summarizeHealthResult(parsedResult)
     };
   } catch (error) {
     return {
@@ -203,12 +212,16 @@ export async function checkProviderHealth(input: ProviderHealthCheckInput): Prom
       credentialStatus,
       adapterStatus: "available",
       requestPreview,
-      costLabel: "none",
-      riskLabel: "local_only",
+      costLabel: provider === "fake" ? "none" : "lowest_possible",
+      riskLabel: provider === "fake" ? "local_only" : "external_call_low_cost",
       notes,
-      error: error instanceof Error ? error.message : "Live fake health check failed."
+      error: error instanceof Error ? error.message : "Live health check failed."
     };
   }
+}
+
+function supportsLiveHealthCheck(provider: string, kind: ProviderKind) {
+  return provider === "openai" && kind === "text";
 }
 
 function createHealthAdapter(provider: string, kind: ProviderKind, model: string): HealthAdapter | null {
@@ -264,6 +277,10 @@ function buildHealthPayload(kind: ProviderKind): JobPayload {
     return {
       ...base,
       jobType: "prompt",
+      metadata: {
+        maxOutputTokens: 8,
+        smokeTest: true
+      },
       outputKind: "image",
       promptLayers: [
         {
@@ -307,6 +324,30 @@ function buildHealthPayload(kind: ProviderKind): JobPayload {
     pitch: 0,
     format: "wav"
   } satisfies AudioJobPayload;
+}
+
+function summarizeHealthResult(result: BaseJobResult<JobPayload["jobType"]>) {
+  const summary: Record<string, unknown> = {
+    provider: result.provider,
+    model: result.model,
+    completedAt: result.completedAt,
+    summary: result.summary,
+    warnings: result.warnings,
+    costEstimate: result.costEstimate ?? null
+  };
+  const promptResult = result as BaseJobResult<JobPayload["jobType"]> & {
+    compiledPrompt?: string;
+    tokenUsage?: Record<string, number>;
+  };
+
+  if (promptResult.compiledPrompt) {
+    summary.compiledPrompt = promptResult.compiledPrompt;
+  }
+  if (promptResult.tokenUsage) {
+    summary.tokenUsage = promptResult.tokenUsage;
+  }
+
+  return summary;
 }
 
 function sanitizeRequestPreview(value: unknown): unknown {

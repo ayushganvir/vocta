@@ -30,7 +30,10 @@ type ProviderHealthCheckResult = {
   mode?: string;
   credentialStatus?: string;
   adapterStatus?: string;
+  costLabel?: string;
+  riskLabel?: string;
   requestPreview?: unknown;
+  responseSummary?: unknown;
   notes?: string[] | string;
   error?: string;
 };
@@ -127,8 +130,8 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
     setProviderCapabilities(payload);
   }
 
-  async function testProviderDryRun(provider: ProviderCapability) {
-    const key = providerHealthCheckKey(provider);
+  async function testProviderHealth(provider: ProviderCapability, live: boolean) {
+    const key = providerHealthCheckKey(provider, live);
     setHealthChecks((current) => ({
       ...current,
       [key]: { isLoading: true }
@@ -142,7 +145,7 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
           provider: provider.provider,
           kind: provider.kind,
           model: provider.defaultModel,
-          live: false
+          live
         })
       });
       const payload = (await parseHealthCheckResponse(response)) as ProviderHealthCheckResult;
@@ -214,7 +217,9 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
         </div>
         <div className="providerMatrixGrid">
           {providerCapabilities?.capabilities.map((provider) => {
-            const healthCheck = healthChecks[providerHealthCheckKey(provider)];
+            const dryRunHealthCheck = healthChecks[providerHealthCheckKey(provider, false)];
+            const liveHealthCheck = healthChecks[providerHealthCheckKey(provider, true)];
+            const canRunLiveTextSmoke = provider.provider === "openai" && provider.kind === "text";
 
             return (
               <article key={`${provider.provider}-${provider.kind}`} className="providerCapabilityCard">
@@ -226,11 +231,21 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
                   <button
                     className="secondaryButton providerTestButton"
                     type="button"
-                    onClick={() => testProviderDryRun(provider)}
-                    disabled={healthCheck?.isLoading}
+                    onClick={() => testProviderHealth(provider, false)}
+                    disabled={dryRunHealthCheck?.isLoading}
                   >
-                    {healthCheck?.isLoading ? "Testing" : "Dry-run test"}
+                    {dryRunHealthCheck?.isLoading ? "Testing" : "Dry-run test"}
                   </button>
+                  {canRunLiveTextSmoke ? (
+                    <button
+                      className="secondaryButton providerTestButton"
+                      type="button"
+                      onClick={() => testProviderHealth(provider, true)}
+                      disabled={liveHealthCheck?.isLoading}
+                    >
+                      {liveHealthCheck?.isLoading ? "Testing" : "Live text smoke"}
+                    </button>
+                  ) : null}
                 </div>
                 <dl>
                   <dt>Jobs</dt>
@@ -243,7 +258,8 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
                   <dd>{provider.enabledInCurrentMode ? "enabled" : "not active in current mode"}</dd>
                 </dl>
                 <p>{provider.notes.join(" ")}</p>
-                <ProviderHealthCheckResultView state={healthCheck} />
+                <ProviderHealthCheckResultView state={dryRunHealthCheck} label="Dry-run result" />
+                <ProviderHealthCheckResultView state={liveHealthCheck} label="Live smoke result" />
               </article>
             );
           }) ?? <p>Loading provider capability matrix...</p>}
@@ -268,11 +284,11 @@ async function parseHealthCheckResponse(response: Response): Promise<ProviderHea
   }
 }
 
-function providerHealthCheckKey(provider: Pick<ProviderCapability, "provider" | "kind">) {
-  return `${provider.provider}:${provider.kind}`;
+function providerHealthCheckKey(provider: Pick<ProviderCapability, "provider" | "kind">, live: boolean) {
+  return `${provider.provider}:${provider.kind}:${live ? "live" : "dry"}`;
 }
 
-function ProviderHealthCheckResultView({ state }: { state?: ProviderHealthCheckState }) {
+function ProviderHealthCheckResultView({ state, label }: { state?: ProviderHealthCheckState; label: string }) {
   if (!state) {
     return null;
   }
@@ -284,9 +300,10 @@ function ProviderHealthCheckResultView({ state }: { state?: ProviderHealthCheckS
   return (
     <div className={`providerHealthResult${state.error ? " providerHealthResultError" : ""}`}>
       {state.isLoading ? (
-        <p>Running dry-run health check...</p>
+        <p>Running {label.toLowerCase()}...</p>
       ) : (
         <>
+          <p className="label">{label}</p>
           <dl>
             <dt>Status</dt>
             <dd>{result?.status ?? (state.error ? "error" : "unknown")}</dd>
@@ -296,9 +313,16 @@ function ProviderHealthCheckResultView({ state }: { state?: ProviderHealthCheckS
             <dd>{formatHealthValue(result?.credentialStatus)}</dd>
             <dt>Adapter</dt>
             <dd>{formatHealthValue(result?.adapterStatus)}</dd>
+            <dt>Cost</dt>
+            <dd>{formatHealthValue(result?.costLabel)}</dd>
+            <dt>Risk</dt>
+            <dd>{formatHealthValue(result?.riskLabel)}</dd>
           </dl>
           {state.error ? <p className="providerHealthError">{state.error}</p> : null}
           {notes ? <p>{Array.isArray(notes) ? notes.join(" ") : notes}</p> : null}
+          {result?.responseSummary ? (
+            <pre aria-label="Provider response summary">{formatRequestPreview(result.responseSummary)}</pre>
+          ) : null}
           {preview ? (
             <pre aria-label="Redacted request preview">{preview}</pre>
           ) : null}

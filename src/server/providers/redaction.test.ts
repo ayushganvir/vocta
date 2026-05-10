@@ -41,4 +41,26 @@ describe("redactPayload", () => {
       }
     });
   });
+
+  it("keeps non-secret token budget and usage fields visible", () => {
+    const result = redactPayload({
+      max_output_tokens: 8,
+      usage: {
+        input_tokens: 12,
+        output_tokens: 1,
+        total_tokens: 13
+      },
+      access_token: "secret"
+    });
+
+    expect(result).toEqual({
+      max_output_tokens: 8,
+      usage: {
+        input_tokens: 12,
+        output_tokens: 1,
+        total_tokens: 13
+      },
+      access_token: "[REDACTED]"
+    });
+  });
 });

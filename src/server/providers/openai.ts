@@ -163,6 +163,7 @@ export function createOpenAiTextProvider(model: string): ProviderAdapter<PromptJ
     },
     buildRequest(input) {
       const sortedLayers = [...input.promptLayers].sort((a, b) => a.orderIndex - b.orderIndex);
+      const maxOutputTokens = numberMetadata(input.metadata, "maxOutputTokens") ?? 300;
 
       return {
         url: "https://api.openai.com/v1/responses",
@@ -175,7 +176,7 @@ export function createOpenAiTextProvider(model: string): ProviderAdapter<PromptJ
           model,
           instructions: "Compile the provided production prompt layers into a concise final generation prompt. Return only the compiled prompt text.",
           input: sortedLayers.map((layer) => `[${layer.label}] ${layer.content}`).join("\n\n"),
-          max_output_tokens: 300
+          max_output_tokens: maxOutputTokens
         },
         metadata: {
           providerMode: "real",
@@ -247,6 +248,11 @@ export function createOpenAiTextProvider(model: string): ProviderAdapter<PromptJ
 
 function openAiApiKey() {
   return process.env.OPENAI_KEY || process.env.OPENAI_API_KEY || "";
+}
+
+function numberMetadata(metadata: Record<string, unknown> | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function openAiImageSize(aspectRatio: ImageJobPayload["aspectRatio"]) {

@@ -142,6 +142,8 @@ Live API smoke tests should be explicit and cheap:
 
 - Keep `PROVIDER_MODE=fake` for normal development and automated tests.
 - Use `PROVIDER_MODE=real` only for deliberate live adapter checks.
+- The `/configuration` OpenAI text row has a separate `Live text smoke` button. It is the only live provider health check currently enabled.
+- OpenAI text smoke uses the Responses API with `max_output_tokens=8`, creates no generation job, and stores no generated asset.
 - For OpenAI Images, the adapter requests `n=1`, `quality=low`, and one generated image.
 - For OpenAI Responses, the adapter caps prompt compilation at `max_output_tokens=300`.
 - For Google voice preview, the endpoint caps sample text at 160 characters and returns inline preview audio instead of creating a generation job.

@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/workspace/app-shell";
 import { WorkspaceRoute } from "@/components/workspace/screens";
 
-export default function HomePage() {
+export default function StyleBiblePage() {
   return (
-    <AppShell activeScreen="projects">
-      <WorkspaceRoute screen="projects" />
+    <AppShell activeScreen="style-bible">
+      <WorkspaceRoute screen="style-bible" />
     </AppShell>
   );
 }

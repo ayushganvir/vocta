@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/workspace/app-shell";
 import { WorkspaceRoute } from "@/components/workspace/screens";
 
-export default function HomePage() {
+export default function ScenesPage() {
   return (
-    <AppShell activeScreen="projects">
-      <WorkspaceRoute screen="projects" />
+    <AppShell activeScreen="scenes">
+      <WorkspaceRoute screen="scenes" />
     </AppShell>
   );
 }

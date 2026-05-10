@@ -12,6 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:seed": "prisma db seed",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "worker": "tsx src/server/jobs/worker.ts"

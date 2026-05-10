@@ -29,6 +29,18 @@ Generate Prisma client:
 npm run prisma:generate
 ```
 
+Create or sync the local SQLite schema:
+
+```bash
+npm run prisma:push
+```
+
+Seed the demo project:
+
+```bash
+npm run prisma:seed
+```
+
 Run the web app:
 
 ```bash
@@ -61,12 +73,12 @@ Run the current lint gate:
 npm run lint
 ```
 
-At this scaffold stage, `lint` delegates to `typecheck` to keep the command non-interactive. A dedicated ESLint config can be added in the UI/app-shell wave.
+At this scaffold stage, `lint` delegates to `typecheck` to keep the command non-interactive. A dedicated ESLint config can be added later.
 
 ## Current Scope
 
-This is Wave 0 scaffolding. Product features are intentionally minimal. The next wave should split across:
+Wave 1 foundation is integrated. Product behavior remains scaffolded:
 
-1. Prisma data model and seed data.
-2. App shell and placeholder screens.
-3. Jobs, storage, and provider contracts.
+1. Prisma data model, repository helpers, and a seeded demo project.
+2. App shell and placeholder workspace screens.
+3. BullMQ queue contracts, worker shell, fake providers, and local storage.

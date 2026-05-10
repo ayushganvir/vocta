@@ -270,13 +270,15 @@ function parseTextResult(input: JobPayload, base: Omit<JobResult, "jobType">): J
     throw new Error(`Text fake provider cannot parse media job type: ${input.jobType}`);
   }
 
+  const exportInput = input as JobPayload<"export">;
+
   return {
     ...base,
     jobType: "export",
-    packagePath: `exports/${input.projectId}/fake-export.zip`,
-    manifestPath: `exports/${input.projectId}/manifest.json`,
-    csvPath: input.includeCsvManifest ? `exports/${input.projectId}/manifest.csv` : undefined,
-    assetCount: input.panelIds?.length ?? 0
+    packagePath: `exports/${exportInput.projectId}/fake-export.zip`,
+    manifestPath: `exports/${exportInput.projectId}/manifest.json`,
+    csvPath: exportInput.includeCsvManifest ? `exports/${exportInput.projectId}/manifest.csv` : undefined,
+    assetCount: exportInput.panelIds?.length ?? 0
   };
 }
 

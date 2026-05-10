@@ -118,25 +118,20 @@ export async function listSourceMaterials(db: DbClient, projectId: string) {
   });
 }
 
-export async function upsertStyleBible(
-  db: DbClient,
-  projectId: string,
-  data: Partial<
-    Pick<
-      Prisma.StyleBibleUncheckedCreateInput,
-      | "charactersText"
-      | "placesText"
-      | "objectsText"
-      | "visualStyle"
-      | "colorPalette"
-      | "lightingStyle"
-      | "cameraStyle"
-      | "negativePromptRules"
-      | "globalReferenceAssetIds"
-      | "notes"
-    >
-  >
-) {
+type StyleBiblePatchInput = {
+  charactersText?: string | null;
+  placesText?: string | null;
+  objectsText?: string | null;
+  visualStyle?: string | null;
+  colorPalette?: string | null;
+  lightingStyle?: string | null;
+  cameraStyle?: string | null;
+  negativePromptRules?: string | null;
+  globalReferenceAssetIds?: Prisma.InputJsonValue;
+  notes?: string | null;
+};
+
+export async function upsertStyleBible(db: DbClient, projectId: string, data: StyleBiblePatchInput) {
   return db.styleBible.upsert({
     where: { projectId },
     update: data,

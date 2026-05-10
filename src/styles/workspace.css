@@ -569,23 +569,39 @@ button,
   padding: 11px;
 }
 
-.providerCapabilityCard > div {
+.providerCapabilityHeader {
   align-items: center;
   display: flex;
   gap: 8px;
   justify-content: space-between;
 }
 
-.providerCapabilityCard > div strong {
+.providerCapabilityTitle {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.providerCapabilityTitle strong {
   color: var(--accent);
   font-size: 13px;
   text-transform: uppercase;
 }
 
-.providerCapabilityCard > div span,
+.providerCapabilityTitle span,
 .providerCapabilityCard p {
   color: var(--muted);
   font-size: 11px;
+}
+
+.providerTestButton {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 5px 8px;
+}
+
+.providerTestButton:disabled {
+  opacity: 0.55;
 }
 
 .providerCapabilityCard dl {
@@ -607,6 +623,47 @@ button,
   font-size: 11px;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.providerHealthResult {
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+}
+
+.providerHealthResultError {
+  border-color: #7c3f3f;
+}
+
+.providerHealthResult dl {
+  gap: 5px 9px;
+  grid-template-columns: 86px minmax(0, 1fr);
+}
+
+.providerHealthResult p {
+  margin: 0;
+}
+
+.providerHealthResult .providerHealthError {
+  color: #f0b0a8;
+}
+
+.providerHealthResult pre {
+  background: #090a08;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: #d8d1c2;
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .debugGrid {

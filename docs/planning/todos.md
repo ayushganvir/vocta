@@ -2,6 +2,8 @@
 
 Status: derived from the answered questionnaire and recommendations. For multi-agent execution order, use [agent_execution_plan.md](./agent_execution_plan.md). This file keeps the detailed product/backlog hierarchy.
 
+Current remaining-work plan: use [remaining_execution_plan.md](./remaining_execution_plan.md) for the next waves. Remaining work is limited to provider health checks/cheap live test harness, real asset handling/previews, scoped chat suggestion/apply, prompt enhancement review/apply, entity/reference warnings before generation, provider capability verification, and final real provider smoke testing. Fake providers remain the default; live calls, generation, export, retries, and apply actions require explicit user clicks.
+
 Legend:
 
 - `P0`: required for MVP end-to-end demo.

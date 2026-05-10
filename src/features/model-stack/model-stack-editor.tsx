@@ -25,6 +25,22 @@ type ProviderCapabilitiesResponse = {
   capabilities: ProviderCapability[];
 };
 
+type ProviderHealthCheckResult = {
+  status?: string;
+  mode?: string;
+  credentialStatus?: string;
+  adapterStatus?: string;
+  requestPreview?: unknown;
+  notes?: string[] | string;
+  error?: string;
+};
+
+type ProviderHealthCheckState = {
+  isLoading: boolean;
+  result?: ProviderHealthCheckResult;
+  error?: string;
+};
+
 const defaultStack = (projectId: string): ModelStackForm => ({
   projectId,
   textProvider: "openai",
@@ -47,6 +63,7 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
     JSON.stringify(initialModelStack?.providerSettings ?? {}, null, 2)
   );
   const [providerCapabilities, setProviderCapabilities] = useState<ProviderCapabilitiesResponse | null>(null);
+  const [healthChecks, setHealthChecks] = useState<Record<string, ProviderHealthCheckState>>({});
   const [message, setMessage] = useState("Project model defaults apply to new generation jobs unless overridden at panel level.");
   const [isSaving, setIsSaving] = useState(false);
 
@@ -110,6 +127,45 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
     setProviderCapabilities(payload);
   }
 
+  async function testProviderDryRun(provider: ProviderCapability) {
+    const key = providerHealthCheckKey(provider);
+    setHealthChecks((current) => ({
+      ...current,
+      [key]: { isLoading: true }
+    }));
+
+    try {
+      const response = await fetch("/api/providers/health-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: provider.provider,
+          kind: provider.kind,
+          model: provider.defaultModel,
+          live: false
+        })
+      });
+      const payload = (await parseHealthCheckResponse(response)) as ProviderHealthCheckResult;
+
+      setHealthChecks((current) => ({
+        ...current,
+        [key]: {
+          isLoading: false,
+          result: payload,
+          error: response.ok ? undefined : payload.error ?? `Health check failed (${response.status}).`
+        }
+      }));
+    } catch (error) {
+      setHealthChecks((current) => ({
+        ...current,
+        [key]: {
+          isLoading: false,
+          error: error instanceof Error ? error.message : "Health check request failed."
+        }
+      }));
+    }
+  }
+
   return (
     <div className="workspaceGrid">
       <section className="widePanel">
@@ -157,29 +213,119 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
           <span>{providerCapabilities ? `${providerCapabilities.providerMode} mode` : "loading"}</span>
         </div>
         <div className="providerMatrixGrid">
-          {providerCapabilities?.capabilities.map((provider) => (
-            <article key={`${provider.provider}-${provider.kind}`} className="providerCapabilityCard">
-              <div>
-                <strong>{provider.provider}</strong>
-                <span>{provider.kind} / {provider.defaultModel}</span>
-              </div>
-              <dl>
-                <dt>Jobs</dt>
-                <dd>{provider.jobTypes.join(", ")}</dd>
-                <dt>Capabilities</dt>
-                <dd>{provider.capabilities.join(", ")}</dd>
-                <dt>Credentials</dt>
-                <dd>{provider.credentialStatus.replace("_", " ")}</dd>
-                <dt>Runtime</dt>
-                <dd>{provider.enabledInCurrentMode ? "enabled" : "not active in current mode"}</dd>
-              </dl>
-              <p>{provider.notes.join(" ")}</p>
-            </article>
-          )) ?? <p>Loading provider capability matrix...</p>}
+          {providerCapabilities?.capabilities.map((provider) => {
+            const healthCheck = healthChecks[providerHealthCheckKey(provider)];
+
+            return (
+              <article key={`${provider.provider}-${provider.kind}`} className="providerCapabilityCard">
+                <div className="providerCapabilityHeader">
+                  <div className="providerCapabilityTitle">
+                    <strong>{provider.provider}</strong>
+                    <span>{provider.kind} / {provider.defaultModel}</span>
+                  </div>
+                  <button
+                    className="secondaryButton providerTestButton"
+                    type="button"
+                    onClick={() => testProviderDryRun(provider)}
+                    disabled={healthCheck?.isLoading}
+                  >
+                    {healthCheck?.isLoading ? "Testing" : "Dry-run test"}
+                  </button>
+                </div>
+                <dl>
+                  <dt>Jobs</dt>
+                  <dd>{provider.jobTypes.join(", ")}</dd>
+                  <dt>Capabilities</dt>
+                  <dd>{provider.capabilities.join(", ")}</dd>
+                  <dt>Credentials</dt>
+                  <dd>{provider.credentialStatus.replace("_", " ")}</dd>
+                  <dt>Runtime</dt>
+                  <dd>{provider.enabledInCurrentMode ? "enabled" : "not active in current mode"}</dd>
+                </dl>
+                <p>{provider.notes.join(" ")}</p>
+                <ProviderHealthCheckResultView state={healthCheck} />
+              </article>
+            );
+          }) ?? <p>Loading provider capability matrix...</p>}
         </div>
       </section>
     </div>
   );
+}
+
+async function parseHealthCheckResponse(response: Response): Promise<ProviderHealthCheckResult> {
+  const text = await response.text();
+  if (!text) {
+    return response.ok ? {} : { error: `Health check failed (${response.status}).` };
+  }
+
+  try {
+    return JSON.parse(text) as ProviderHealthCheckResult;
+  } catch {
+    return {
+      error: response.ok ? "Health check returned invalid JSON." : `Health check failed (${response.status}).`
+    };
+  }
+}
+
+function providerHealthCheckKey(provider: Pick<ProviderCapability, "provider" | "kind">) {
+  return `${provider.provider}:${provider.kind}`;
+}
+
+function ProviderHealthCheckResultView({ state }: { state?: ProviderHealthCheckState }) {
+  if (!state) {
+    return null;
+  }
+
+  const result = state.result;
+  const notes = result?.notes;
+  const preview = formatRequestPreview(result?.requestPreview);
+
+  return (
+    <div className={`providerHealthResult${state.error ? " providerHealthResultError" : ""}`}>
+      {state.isLoading ? (
+        <p>Running dry-run health check...</p>
+      ) : (
+        <>
+          <dl>
+            <dt>Status</dt>
+            <dd>{result?.status ?? (state.error ? "error" : "unknown")}</dd>
+            <dt>Mode</dt>
+            <dd>{result?.mode ?? "dry-run"}</dd>
+            <dt>Credentials</dt>
+            <dd>{formatHealthValue(result?.credentialStatus)}</dd>
+            <dt>Adapter</dt>
+            <dd>{formatHealthValue(result?.adapterStatus)}</dd>
+          </dl>
+          {state.error ? <p className="providerHealthError">{state.error}</p> : null}
+          {notes ? <p>{Array.isArray(notes) ? notes.join(" ") : notes}</p> : null}
+          {preview ? (
+            <pre aria-label="Redacted request preview">{preview}</pre>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function formatHealthValue(value: string | undefined) {
+  return value ? value.replaceAll("_", " ") : "not returned";
+}
+
+function formatRequestPreview(preview: unknown) {
+  if (!preview) {
+    return "";
+  }
+
+  if (typeof preview === "string") {
+    return preview;
+  }
+
+  try {
+    return JSON.stringify(preview, null, 2);
+  } catch {
+    return String(preview);
+  }
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

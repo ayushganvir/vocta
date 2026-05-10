@@ -2,6 +2,8 @@
 
 This plan turns the PRD, questionnaire, and recommendations into an implementation order designed for multiple agents. The goal is to avoid agents stepping on each other by separating work by dependency and ownership.
 
+Current forward plan: use [remaining_execution_plan.md](./remaining_execution_plan.md) for remaining work after the fake-provider MVP, queued jobs, export, stale-state workflow, provider routing, and configuration matrix progress. The historical waves below remain useful for context and ownership boundaries.
+
 Recommended architecture for MVP:
 
 - Frontend: Next.js
@@ -689,3 +691,10 @@ Current parallel batch:
 
 - Agent 7A: Jobs visibility API and UI.
 - Agent 7B: Queue-backed generation and export execution.
+
+Current remaining-work batch:
+
+- Wave R1: provider safety, health checks, cheap live harness, and capability verification.
+- Wave R2: real asset handling/previews and entity/reference warnings before generation.
+- Wave R3: prompt enhancement review/apply and scoped chat suggestion/apply.
+- Wave R4: final coordinated real provider smoke testing.

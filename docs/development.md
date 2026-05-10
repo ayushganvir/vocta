@@ -47,6 +47,12 @@ Run the web app:
 npm run dev
 ```
 
+The frontend and API server always run on:
+
+```text
+http://localhost:3003
+```
+
 Run a Redis server in a separate terminal before starting workers. A local Homebrew install usually works with:
 
 ```bash
@@ -73,7 +79,7 @@ npm run dev:iterm
 
 This creates one iTerm2 tab with split panes for:
 
-- `Web`: `PORT=3000 npm run dev`, the Next.js app and API routes with hot reload.
+- `Web`: `npm run dev`, the Next.js app and API routes with hot reload on `http://localhost:3003`.
 - `Worker`: `npm run worker:dev`, the BullMQ worker restarted by `tsx watch` when worker/server code changes.
 - `Redis`: `redis-server`, or a hold-open status pane if Redis is already running.
 - `Vitest Watch`: `npm run test:watch`, focused feedback while editing.
@@ -82,12 +88,6 @@ Optional Prisma Studio can be included with:
 
 ```bash
 VOCTA_DEV_STUDIO=1 npm run dev:iterm
-```
-
-To use a different app port:
-
-```bash
-PORT=3008 npm run dev:iterm
 ```
 
 Queue-backed generation and export now use Prisma as the source of truth and BullMQ/Redis for execution. The normal local workflow is:

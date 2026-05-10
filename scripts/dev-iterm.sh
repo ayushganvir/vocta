@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_PORT="${PORT:-3000}"
+APP_PORT="3003"
 INCLUDE_STUDIO="${VOCTA_DEV_STUDIO:-0}"
 
 if ! command -v osascript >/dev/null 2>&1; then
@@ -31,7 +31,7 @@ shell_command() {
     "$command"
 }
 
-WEB_CMD="$(shell_command "Vocta Web :$APP_PORT" "PORT=$APP_PORT npm run dev")"
+WEB_CMD="$(shell_command "Vocta Web :$APP_PORT" "npm run dev")"
 WORKER_CMD="$(shell_command "Vocta Worker" "npm run worker:dev")"
 REDIS_CMD="$(shell_command "Redis" 'if command -v redis-cli >/dev/null 2>&1 && redis-cli ping >/dev/null 2>&1; then echo "Redis already running on REDIS_URL=${REDIS_URL:-redis://localhost:6379}"; while true; do sleep 3600; done; else redis-server; fi')"
 TEST_CMD="$(shell_command "Vitest Watch" "npm run test:watch")"

@@ -92,17 +92,43 @@ export function AppShell({ activeScreen, children }: AppShellProps) {
       <aside className="rightInspector" aria-label="Prompt, debug, and chat inspector">
         <div className="inspectorHeader">
           <div>
-            <p className="eyebrow">Inspector</p>
-            <h2>Prompt / Debug / Chat</h2>
+            <p className="eyebrow">Guide</p>
+            <h2>{activeItem.label}</h2>
           </div>
-          <span className="compactBadge">Read only</span>
+          <span className="compactBadge">Manual</span>
         </div>
 
         <section className="inspectorSection">
           <div className="sectionTitle">
-            <h3>Prompt Layers</h3>
-            <span>4</span>
+            <h3>What To Do Here</h3>
+            <span>editable</span>
           </div>
+          <div className="guideList">
+            {screenGuide(activeScreen).map((item) => (
+              <p key={item}>{item}</p>
+            ))}
+          </div>
+        </section>
+
+        <section className="inspectorSection glossaryBox">
+          <div className="sectionTitle">
+            <h3>Scene vs Panel</h3>
+            <span>plain English</span>
+          </div>
+          <p><strong>Scene:</strong> a larger section of the story.</p>
+          <p><strong>Panel:</strong> one ordered beat or shot container inside a scene. Panels hold narration, visual intent, prompts, generated assets, and timeline metadata.</p>
+        </section>
+
+        <section className="inspectorSection chatBox">
+          <div className="sectionTitle">
+            <h3>Assistant Notes</h3>
+            <span>draft only</span>
+          </div>
+          <div className="chatMessage">AI actions create drafts or suggestions. They do not change final creative state until you click Apply, Save, Select, or Generate.</div>
+        </section>
+
+        <details className="inspectorDetails">
+          <summary>Read-only debug reference</summary>
           <div className="layerStack">
             {promptLayers.map((layer) => (
               <article key={layer.label} className="layerItem">
@@ -114,33 +140,69 @@ export function AppShell({ activeScreen, children }: AppShellProps) {
               </article>
             ))}
           </div>
-        </section>
-
-        <section className="inspectorSection">
-          <div className="sectionTitle">
-            <h3>Debug Payload</h3>
-            <span>mock</span>
-          </div>
           <pre className="debugBlock">{`{
-  "panelId": "p-002",
-  "provider": "fake-image-v1",
-  "apiCall": "not-started",
+  "debug": "read-only",
+  "editIn": "Project, Source Material, Entities, Scenes",
   "requiresClick": true
 }`}</pre>
-        </section>
-
-        <section className="inspectorSection chatBox">
-          <div className="sectionTitle">
-            <h3>Scoped Chat</h3>
-            <span>placeholder</span>
-          </div>
-          <div className="chatMessage">Ask about the selected panel, prompt layers, stale dependencies, or provider output.</div>
-          <form className="chatInput" aria-label="Scoped chat placeholder">
-            <input aria-label="Chat message" placeholder="Type a note..." />
-            <button type="button">Send</button>
-          </form>
-        </section>
+        </details>
       </aside>
     </main>
   );
+}
+
+function screenGuide(activeScreen: ScreenId) {
+  if (activeScreen === "projects") {
+    return [
+      "Paste a script in Start Here, then run Analyze Story.",
+      "Change the project aspect ratio in Edit Project.",
+      "Apply scenes and panels only after reviewing the AI draft."
+    ];
+  }
+
+  if (activeScreen === "source-material") {
+    return [
+      "Store scripts, notes, image references, and source links here.",
+      "Analyze Story drafts summary, entities, style, scenes, and panels.",
+      "Entities can be refined later in the Entity Registry."
+    ];
+  }
+
+  if (activeScreen === "scenes") {
+    return [
+      "Edit the selected panel's narration, visual intent, and motion intent.",
+      "Change video aspect ratio, duration, source mode, and audio settings in the generation settings.",
+      "Use debug only to inspect what happened after a generation call."
+    ];
+  }
+
+  if (activeScreen === "entities") {
+    return [
+      "Define characters, places, objects, and speaker voices.",
+      "Entity references propagate into panel generation after mapping.",
+      "Missing visual references warn before image or video generation."
+    ];
+  }
+
+  if (activeScreen === "configuration") {
+    return [
+      "Set project-level provider defaults here.",
+      "Use dry-run checks before live provider tests.",
+      "Real provider calls stay explicit and visible."
+    ];
+  }
+
+  if (activeScreen === "export") {
+    return [
+      "Only selected assets enter the ordered package.",
+      "Exports are semantic timeline packages, not final rendered videos.",
+      "Editors import the ordered folders and manifest into Filmora or Premiere."
+    ];
+  }
+
+  return [
+    "Review queued work, provider payloads, errors, and retries.",
+    "Jobs preserve traceability from prompt to generated asset.",
+    "Retries require an explicit click."
+  ];
 }

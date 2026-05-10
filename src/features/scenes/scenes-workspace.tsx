@@ -704,11 +704,26 @@ export function ScenesWorkspace() {
 
   return (
     <div className={styles.workspace}>
+      <section className={styles.flowGuide} aria-label="Scenes and panels explanation">
+        <div>
+          <strong>Scene</strong>
+          <span>A story section, like intro, conflict, reveal, or closing.</span>
+        </div>
+        <div>
+          <strong>Panel</strong>
+          <span>One ordered beat or shot container inside a scene. This is where narration, prompts, settings, and selected assets live.</span>
+        </div>
+        <div>
+          <strong>Inspector</strong>
+          <span>Debug data is read-only on purpose. Edit the fields below, then save or regenerate manually.</span>
+        </div>
+      </section>
+
       <section className={styles.sceneRail} aria-label="Scenes">
         <div className={styles.panelHeader}>
           <div>
-            <p>Required scenes</p>
-            <h3>Scene list</h3>
+            <p>Story sections</p>
+            <h3>Scenes</h3>
           </div>
           <button type="button" onClick={createScene} disabled={isBusy}>
             Add
@@ -738,7 +753,7 @@ export function ScenesWorkspace() {
         <div className={styles.panelHeader}>
           <div>
             <p>{selectedScene?.title ?? "No scene selected"}</p>
-            <h3>Panel order</h3>
+            <h3>Panels</h3>
           </div>
           <button type="button" onClick={createPanel} disabled={isBusy || !selectedScene}>
             New
@@ -765,9 +780,9 @@ export function ScenesWorkspace() {
       <section className={styles.detailPane} aria-label="Panel detail">
         <div className={styles.detailHeader}>
           <div>
-            <p>Panel {orderLabel}</p>
+            <p>Editable panel {orderLabel}</p>
             <h3>{selectedPanel?.title ?? "No panel selected"}</h3>
-            <span>{selectedPanel?.id ?? "Create or select a panel"}</span>
+            <span>Change fields here, then click Save. Generation and AI suggestions only run from explicit buttons.</span>
           </div>
           <div className={styles.actionRow}>
             <button type="button" onClick={() => movePanel(-1)} disabled={isBusy || !selectedPanel}>
@@ -815,6 +830,14 @@ export function ScenesWorkspace() {
           <Area label="Narration" value={draft.narrationText} onChange={(value) => setDraftField("narrationText", value)} />
           <Area label="Visual intent" value={draft.visualIntent} onChange={(value) => setDraftField("visualIntent", value)} />
           <Area label="Motion intent" value={draft.motionIntent} onChange={(value) => setDraftField("motionIntent", value)} />
+        </div>
+
+        <details className={styles.advancedDetails}>
+          <summary>
+            <span>Advanced prompt layers and references</span>
+            <small>Entity IDs, reference IDs, manual prompt fields, notes</small>
+          </summary>
+          <div className={styles.formGrid}>
           <Area label="Narrative purpose" value={draft.narrativePurpose} onChange={(value) => setDraftField("narrativePurpose", value)} />
           <Area label="Reference asset IDs" value={draft.panelReferenceAssetIds} onChange={(value) => setDraftField("panelReferenceAssetIds", value)} />
           <Area label="Mapped entity IDs" value={draft.mappedEntityIds} onChange={(value) => setDraftField("mappedEntityIds", value)} />
@@ -824,7 +847,8 @@ export function ScenesWorkspace() {
           <Area label="Video prompt" value={draft.videoPrompt} onChange={(value) => setDraftField("videoPrompt", value)} />
           <Area label="Audio prompt" value={draft.audioPrompt} onChange={(value) => setDraftField("audioPrompt", value)} />
           <Area label="Negative prompt" value={draft.negativePrompt} onChange={(value) => setDraftField("negativePrompt", value)} />
-        </div>
+          </div>
+        </details>
 
         <div className={styles.settingsGrid}>
           <section className={styles.settingsPanel}>
@@ -934,8 +958,20 @@ export function ScenesWorkspace() {
         {selectedPanel ? (
           <>
             <StaleWarnings panel={selectedPanel} onClear={clearStaleWarnings} isBusy={isBusy} />
-            <AssetHistory panel={selectedPanel} onSelectAsset={selectAsset} isBusy={isBusy} />
-            <DebugInspector jobs={selectedPanel.generationJobs} />
+            <details className={styles.advancedDetails}>
+              <summary>
+                <span>Generated asset history</span>
+                <small>{selectedPanel.generatedAssets.length} candidate asset(s), selected assets enter export</small>
+              </summary>
+              <AssetHistory panel={selectedPanel} onSelectAsset={selectAsset} isBusy={isBusy} />
+            </details>
+            <details className={styles.advancedDetails}>
+              <summary>
+                <span>Read-only debug inspector</span>
+                <small>Provider payloads, compiled prompts, logs, errors</small>
+              </summary>
+              <DebugInspector jobs={selectedPanel.generationJobs} />
+            </details>
           </>
         ) : null}
 

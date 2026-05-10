@@ -5,6 +5,33 @@
   min-height: 620px;
 }
 
+.flowGuide {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.flowGuide div {
+  border: 1px solid var(--line);
+  background: #131410;
+  padding: 10px;
+}
+
+.flowGuide strong {
+  display: block;
+  color: var(--accent);
+  font-size: 12px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.flowGuide span {
+  color: #d8d1c2;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .sceneRail,
 .panelRail,
 .detailPane {
@@ -204,6 +231,38 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.advancedDetails {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  background: #10110f;
+}
+
+.advancedDetails summary {
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+  padding: 10px 12px;
+}
+
+.advancedDetails summary span {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.advancedDetails summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.advancedDetails > .formGrid,
+.advancedDetails > .assetSection,
+.advancedDetails > .debugSection {
+  border-top: 1px solid var(--line);
+  margin: 0;
+  padding: 12px;
 }
 
 .field,
@@ -611,6 +670,10 @@
 
 @media (max-width: 1100px) {
   .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .flowGuide {
     grid-template-columns: 1fr;
   }
 

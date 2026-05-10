@@ -917,6 +917,47 @@ select {
   padding: 10px;
 }
 
+.guideList {
+  display: grid;
+  gap: 8px;
+}
+
+.guideList p,
+.glossaryBox p {
+  background: #11120f;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #d8d1c2;
+  font-size: 12px;
+  margin: 0;
+  padding: 9px;
+}
+
+.glossaryBox strong {
+  color: var(--accent);
+}
+
+.inspectorDetails {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.inspectorDetails summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inspectorDetails .layerStack,
+.inspectorDetails .debugBlock {
+  margin-top: 10px;
+}
+
 .chatBox {
   align-self: stretch;
 }

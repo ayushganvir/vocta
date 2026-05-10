@@ -11,6 +11,8 @@ import {
   PROJECT_TITLE_MAX_LENGTH
 } from "./project-validation";
 import type { ProjectListItem } from "./project-types";
+import type { StoryAnalysisDraftItem } from "@/features/story-analysis/types";
+import { SCRIPT_BODY_MAX_LENGTH, SCRIPT_TITLE_MAX_LENGTH } from "@/features/source-material/source-material-validation";
 
 type ProjectsWorkspaceProps = {
   initialProjects: ProjectListItem[];
@@ -36,8 +38,13 @@ export function ProjectsWorkspace({ initialProjects }: ProjectsWorkspaceProps) {
   const [editForm, setEditForm] = useState<ProjectFormState>(() =>
     projectToForm(initialProjects[0])
   );
+  const [scriptTitle, setScriptTitle] = useState("Main Script");
+  const [scriptBody, setScriptBody] = useState("");
+  const [storyDraft, setStoryDraft] = useState<StoryAnalysisDraftItem | null>(null);
   const [message, setMessage] = useState("Create, edit, and archive actions are saved only after an explicit click.");
+  const [storyMessage, setStoryMessage] = useState("Paste a script, then create an AI draft of scenes and panels. Nothing is applied until you click Apply.");
   const [isSaving, setIsSaving] = useState(false);
+  const [isStoryBusy, setIsStoryBusy] = useState(false);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedId) ?? projects[0],
@@ -86,6 +93,133 @@ export function ProjectsWorkspace({ initialProjects }: ProjectsWorkspaceProps) {
     );
   }
 
+  async function saveScriptAndAnalyze() {
+    if (!selectedProject) {
+      setStoryMessage("Select or create a project first.");
+      return;
+    }
+    if (!scriptBody.trim()) {
+      setStoryMessage("Paste script text before analyzing.");
+      return;
+    }
+
+    setIsStoryBusy(true);
+    setStoryMessage("Saving script source...");
+    try {
+      const sourceResponse = await fetch("/api/source-material", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: selectedProject.id,
+          type: "SCRIPT",
+          title: scriptTitle,
+          bodyText: scriptBody
+        })
+      });
+      const sourcePayload = (await sourceResponse.json()) as {
+        data?: { id: string; title: string };
+        error?: string;
+      };
+      if (!sourceResponse.ok || !sourcePayload.data) {
+        throw new Error(sourcePayload.error ?? "Script save failed.");
+      }
+
+      setStoryMessage("Analyzing story into scenes and panels...");
+      const analysisResponse = await fetch("/api/story-analysis", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: selectedProject.id,
+          sourceMaterialIds: [sourcePayload.data.id],
+          notes: "Project setup flow"
+        })
+      });
+      const analysisPayload = (await analysisResponse.json()) as {
+        data?: StoryAnalysisDraftItem;
+        error?: string;
+      };
+      if (!analysisResponse.ok || !analysisPayload.data) {
+        throw new Error(analysisPayload.error ?? "Story analysis failed.");
+      }
+
+      setStoryDraft(analysisPayload.data);
+      setStoryMessage("Draft ready. Review it below, then apply scenes and panels when it looks right.");
+      router.refresh();
+    } catch (error) {
+      setStoryMessage(error instanceof Error ? error.message : "Script analysis failed.");
+    } finally {
+      setIsStoryBusy(false);
+    }
+  }
+
+  async function applyStoryDraft(section: "scenes" | "entities" | "style") {
+    if (!selectedProject || !storyDraft) {
+      return;
+    }
+
+    setIsStoryBusy(true);
+    setStoryMessage(`Applying ${section} from the latest draft...`);
+    try {
+      const response = await fetch("/api/story-analysis", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "apply",
+          projectId: selectedProject.id,
+          jobId: storyDraft.id,
+          apply: { section }
+        })
+      });
+      const payload = (await response.json()) as {
+        data?: {
+          entities: Array<{ draftId: string }>;
+          styleFields: string[];
+          scenes: Array<{ draftId: string; panelIds: string[] }>;
+        };
+        error?: string;
+      };
+      if (!response.ok || !payload.data) {
+        throw new Error(payload.error ?? "Apply failed.");
+      }
+      const applied = payload.data;
+
+      setStoryDraft((current) => current
+        ? {
+            ...current,
+            applied: {
+              entityIds: [...new Set([...current.applied.entityIds, ...applied.entities.map((entity) => entity.draftId)])],
+              styleFields: [...new Set([...current.applied.styleFields, ...applied.styleFields])],
+              sceneIds: [...new Set([...current.applied.sceneIds, ...applied.scenes.map((scene) => scene.draftId)])]
+            }
+          }
+        : current
+      );
+      if (section === "scenes") {
+        const appliedPanels = applied.scenes.reduce((sum, scene) => sum + scene.panelIds.length, 0);
+        setProjects((current) =>
+          current.map((project) =>
+            project.id === selectedProject.id
+              ? {
+                  ...project,
+                  _count: {
+                    ...project._count,
+                    scenes: project._count.scenes + applied.scenes.length,
+                    panels: project._count.panels + appliedPanels
+                  }
+                }
+              : project
+          )
+        );
+      }
+      setStoryMessage(`Applied ${section}. You can keep editing manually after this.`);
+      router.refresh();
+    } catch (error) {
+      setStoryMessage(error instanceof Error ? error.message : "Apply failed.");
+    } finally {
+      setIsStoryBusy(false);
+    }
+  }
+
   async function submitJson<T>(url: string, method: string, body: unknown, onSuccess: (value: T) => void) {
     setIsSaving(true);
     setMessage("Saving...");
@@ -111,6 +245,105 @@ export function ProjectsWorkspace({ initialProjects }: ProjectsWorkspaceProps) {
   return (
     <div className={styles.workspace}>
       <section className={styles.panel}>
+        <div className={styles.hero}>
+          <div>
+            <span>Project setup</span>
+            <h2>{selectedProject?.title ?? "Create or select a project"}</h2>
+            <p>
+              Start with a script. The AI drafts scenes and panels; you review and apply them. After that, open Scenes to edit every panel and generate assets.
+            </p>
+          </div>
+          <div className={styles.summaryGrid}>
+            <strong>{selectedProject?.aspectRatio ?? DEFAULT_PROJECT_ASPECT_RATIO}</strong>
+            <span>Aspect ratio</span>
+            <strong>{selectedProject?._count.scenes ?? 0}</strong>
+            <span>Scenes</span>
+            <strong>{selectedProject?._count.panels ?? 0}</strong>
+            <span>Panels</span>
+          </div>
+        </div>
+
+        <section className={styles.startPanel}>
+          <div className={styles.sectionTitle}>
+            <h3>Start Here: Script To Scenes</h3>
+            <span>AI draft, explicit apply</span>
+          </div>
+          <div className={styles.flowSteps}>
+            <span>1. Paste script</span>
+            <span>2. Analyze story</span>
+            <span>3. Apply scenes and panels</span>
+          </div>
+          <label className={styles.field}>
+            <span className={styles.label}>Script title</span>
+            <input
+              value={scriptTitle}
+              maxLength={SCRIPT_TITLE_MAX_LENGTH}
+              onChange={(event) => setScriptTitle(event.target.value)}
+            />
+          </label>
+          <label className={styles.field}>
+            <span className={styles.label}>Script text</span>
+            <textarea
+              value={scriptBody}
+              maxLength={SCRIPT_BODY_MAX_LENGTH}
+              rows={8}
+              placeholder="Paste the full script, narration, or rough story notes here."
+              onChange={(event) => setScriptBody(event.target.value)}
+            />
+          </label>
+          <div className={styles.actions}>
+            <button
+              className={`${styles.button} ${styles.primaryButton}`}
+              type="button"
+              disabled={isStoryBusy || !selectedProject}
+              onClick={saveScriptAndAnalyze}
+            >
+              Save script and analyze story
+            </button>
+            <button className={styles.button} type="button" onClick={() => router.push("/source-material")}>
+              Open source material
+            </button>
+            <button className={styles.button} type="button" onClick={() => router.push("/scenes")}>
+              Open scenes
+            </button>
+          </div>
+          {storyDraft ? (
+            <div className={styles.draftPreview}>
+              <div className={styles.sectionTitle}>
+                <h3>AI Draft Preview</h3>
+                <span>{draftTotals(storyDraft).scenes} scenes / {draftTotals(storyDraft).panels} panels</span>
+              </div>
+              <p>{storyDraft.draft.storySummary}</p>
+              <div className={styles.draftList}>
+                {storyDraft.draft.scenes.map((scene) => (
+                  <article key={scene.id}>
+                    <strong>{scene.orderIndex}. {scene.title}</strong>
+                    <span>{scene.panels.length} panel(s)</span>
+                    <p>{scene.synopsis}</p>
+                  </article>
+                ))}
+              </div>
+              <div className={styles.actions}>
+                <button
+                  className={`${styles.button} ${styles.primaryButton}`}
+                  type="button"
+                  disabled={isStoryBusy || storyDraft.applied.sceneIds.length === storyDraft.draft.scenes.length}
+                  onClick={() => applyStoryDraft("scenes")}
+                >
+                  {storyDraft.applied.sceneIds.length === storyDraft.draft.scenes.length ? "Scenes applied" : "Apply scenes and panels"}
+                </button>
+                <button className={styles.button} type="button" disabled={isStoryBusy} onClick={() => applyStoryDraft("entities")}>
+                  Apply entities
+                </button>
+                <button className={styles.button} type="button" disabled={isStoryBusy} onClick={() => applyStoryDraft("style")}>
+                  Apply style
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <p className={styles.message}>{storyMessage}</p>
+        </section>
+
         <div className={styles.sectionTitle}>
           <h3>Projects</h3>
           <span>{projects.length} records</span>
@@ -234,10 +467,19 @@ export function ProjectsWorkspace({ initialProjects }: ProjectsWorkspaceProps) {
         ) : null}
 
         <p className={styles.message}>{message}</p>
-        <p className={styles.helper}>Project duration is intentionally optional for MVP.</p>
+        <p className={styles.helper}>
+          Panels are not screens. A scene is a larger story section; a panel is one ordered story beat or shot container inside that scene.
+        </p>
       </aside>
     </div>
   );
+}
+
+function draftTotals(draft: StoryAnalysisDraftItem) {
+  return {
+    scenes: draft.draft.scenes.length,
+    panels: draft.draft.scenes.reduce((sum, scene) => sum + scene.panels.length, 0)
+  };
 }
 
 function projectToForm(project?: ProjectListItem): ProjectFormState {

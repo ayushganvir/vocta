@@ -11,6 +11,124 @@
   padding: 14px;
 }
 
+.hero {
+  align-items: stretch;
+  background: #131410;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.hero span,
+.flowSteps span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hero h2 {
+  color: var(--foreground);
+  font-size: 22px;
+  margin: 6px 0;
+}
+
+.hero p,
+.draftPreview p {
+  color: #d8d1c2;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.summaryGrid {
+  align-content: center;
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: 80px minmax(0, 1fr);
+  padding: 12px;
+}
+
+.summaryGrid strong {
+  color: var(--foreground);
+  font-size: 18px;
+}
+
+.summaryGrid span {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.startPanel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.flowSteps {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.flowSteps span {
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.draftPreview {
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.draftList {
+  display: grid;
+  gap: 8px;
+}
+
+.draftList article {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+}
+
+.draftList strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.draftList span {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.draftList p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
 .sectionTitle {
   align-items: center;
   border-bottom: 1px solid var(--line);
@@ -146,7 +264,9 @@
 
 @media (max-width: 920px) {
   .workspace,
-  .projectRow {
+  .projectRow,
+  .hero,
+  .flowSteps {
     grid-template-columns: 1fr;
   }
 }

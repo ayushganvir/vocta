@@ -533,6 +533,74 @@ Acceptance:
 
 - The internal team can produce an editor-ready ordered asset package using fake providers.
 
+## Wave 7: Jobs Visibility and Queue-Backed Execution
+
+Current active wave. Detailed implementation plan: [wave_7_jobs_queue_plan.md](./wave_7_jobs_queue_plan.md).
+
+Run after the fake-provider generation, export, and stale-state flows exist.
+
+### Agent 7A: Jobs Visibility API and UI
+
+Ownership:
+
+- jobs page
+- jobs REST APIs
+- job query/read model
+- retry/cancel routes
+
+Todos:
+
+- [ ] Replace the mock jobs page with a database-backed polling workspace.
+- [ ] Add jobs list/detail APIs with project, status, type, and panel filters.
+- [ ] Add manual retry and cancel endpoints.
+- [ ] Show compiled prompts, request payloads, response summaries, logs, errors, references, generated assets, and retry relationships.
+
+Acceptance:
+
+- Internal users can inspect every generation job from the app.
+- Retry and cancel require explicit user clicks.
+
+### Agent 7B: Queue-Backed Generation and Export Execution
+
+Ownership:
+
+- queue services
+- worker execution
+- generation request/execute split
+- export package enqueue/execute split
+
+Todos:
+
+- [ ] Convert image, video, and audio generation POST routes to queued requests.
+- [ ] Let the worker execute provider calls, persist assets, update selected pointers, and finalize job state.
+- [ ] Convert export package creation into a queued export package job.
+- [ ] Preserve request payloads, compiled prompts, references, logs, and errors.
+- [ ] Keep BullMQ attempts at one; retries are manual.
+
+Acceptance:
+
+- Generation/export routes return queued state quickly.
+- Worker completion updates Prisma records and selected assets/packages.
+- Failed jobs preserve enough state for debug and manual retry.
+
+## Gate 7: Queue Integration
+
+Owner: Integration agent
+
+Todos:
+
+- [ ] Run typecheck, tests, and production build.
+- [ ] Start Redis, app, and worker locally.
+- [ ] Trigger image, video, audio, and export actions from the UI.
+- [ ] Confirm jobs appear in `/jobs` as queued/running/completed.
+- [ ] Confirm retry creates a new queued job and cancel only affects cancellable jobs.
+- [ ] Confirm stale-state changes do not enqueue jobs.
+- [ ] Commit and push after the gate passes.
+
+Acceptance:
+
+- The MVP has visible asynchronous execution without hidden creative automation.
+
 ## Wave 6: Real Provider Adapters
 
 Start after the fake-provider MVP is stable.
@@ -617,3 +685,7 @@ Good fifth parallel batch:
 - Agent 5B: Export.
 - Agent 5C: Scoped chat.
 
+Current parallel batch:
+
+- Agent 7A: Jobs visibility API and UI.
+- Agent 7B: Queue-backed generation and export execution.

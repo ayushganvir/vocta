@@ -161,6 +161,15 @@
   white-space: nowrap;
 }
 
+.panelButton em,
+.selectedPanel em {
+  grid-column: 2;
+  color: var(--warning);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .warningBar {
   display: flex;
   align-items: center;
@@ -180,6 +189,15 @@
 .warningBar span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.warningBar button {
+  min-height: 30px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--foreground);
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .formGrid {
@@ -254,6 +272,7 @@
   margin-top: 12px;
 }
 
+.staleSection,
 .assetSection,
 .debugSection {
   margin-top: 16px;
@@ -286,6 +305,35 @@
 .sectionHeader span,
 .emptyState {
   color: var(--muted);
+  font-size: 12px;
+}
+
+.sectionHeader button {
+  min-height: 30px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.sectionHeader button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.staleSection ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.staleSection li {
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--line));
+  background: #211f18;
+  color: var(--warning);
+  padding: 8px 10px;
   font-size: 12px;
 }
 

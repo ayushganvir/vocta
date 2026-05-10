@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createEntitiesPrismaClient, getMappedPanelCount, serializeEntity } from "@/features/entities/data";
 import { entityPatchSchema } from "@/features/entities/schema";
+import { markMappedEntityPanelsStale } from "@/server/stale/service";
 
 const prisma = createEntitiesPrismaClient();
 
@@ -31,6 +32,15 @@ export async function PATCH(request: Request, context: EntityRouteContext) {
     where: { id: entityId },
     data
   });
+  const referenceChanged =
+    "selectedReferenceAssetId" in data &&
+    data.selectedReferenceAssetId !== existing.selectedReferenceAssetId;
+  await markMappedEntityPanelsStale(
+    prisma,
+    projectId,
+    entityId,
+    referenceChanged ? "entityReferenceChanged" : "entityChanged"
+  );
 
   return NextResponse.json({
     entity: serializeEntity({
@@ -55,6 +65,7 @@ export async function DELETE(request: Request, context: EntityRouteContext) {
   }
 
   const mappedPanelCount = await getMappedPanelCount(projectId, entityId);
+  await markMappedEntityPanelsStale(prisma, projectId, entityId, "entityDeleted");
 
   await prisma.entity.delete({ where: { id: entityId } });
 

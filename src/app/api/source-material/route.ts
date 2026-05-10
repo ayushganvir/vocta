@@ -7,6 +7,7 @@ import {
   createSourceMaterialPayloadSchema,
   validateImageMimeType
 } from "@/features/source-material/source-material-validation";
+import { markPanelsStale } from "@/server/stale/service";
 
 export async function GET(request: Request) {
   try {
@@ -45,6 +46,10 @@ export async function POST(request: Request) {
         title: payload.title,
         bodyText: payload.bodyText,
         metadata: { source: "manual" }
+      });
+      await markPanelsStale(prisma, {
+        projectId: payload.projectId,
+        reason: "sourceMaterialChanged"
       });
 
       return NextResponse.json({ data: serializeSourceMaterial({ ...material, fileAsset: null }) }, { status: 201 });
@@ -86,6 +91,10 @@ export async function POST(request: Request) {
         source: "manual",
         uploadStub: true
       }
+    });
+    await markPanelsStale(prisma, {
+      projectId: payload.projectId,
+      reason: "sourceMaterialChanged"
     });
 
     return NextResponse.json(

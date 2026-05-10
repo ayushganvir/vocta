@@ -10,6 +10,7 @@ import {
   panelUpdateData,
   serializePanel
 } from "../../scenes/_helpers";
+import { markPanelPatchStale } from "@/server/stale/service";
 
 type RouteContext = {
   params: Promise<{ panelId: string }>;
@@ -52,6 +53,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       where: { id: panelId },
       data
     });
+    await markPanelPatchStale(prisma, current, parsed.data);
     const panel = await prisma.panel.findUniqueOrThrow({
       where: { id: panelId },
       include: {

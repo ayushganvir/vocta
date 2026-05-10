@@ -8,6 +8,7 @@ import {
 } from "@/server/db/repositories";
 import { LocalStorageDriver } from "@/server/storage/local";
 import type { StorageDriver } from "@/server/storage/types";
+import { staleWarnings } from "@/server/stale/service";
 
 import { createUncompressedZip, type ZipEntry } from "./zip";
 
@@ -513,14 +514,6 @@ function extensionForAsset(asset: SelectedAsset) {
   if (asset.mimeType === "application/json") return ".json";
   if (asset.mimeType === "text/csv") return ".csv";
   return ".bin";
-}
-
-function staleWarnings(value: Prisma.JsonValue) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-
-  return Object.entries(value)
-    .filter(([, flag]) => Boolean(flag))
-    .map(([key, flag]) => typeof flag === "string" ? `${key}: ${flag}` : key);
 }
 
 function jsonStringArray(value: Prisma.JsonValue) {

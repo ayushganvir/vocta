@@ -31,6 +31,7 @@ type Panel = {
   selectedVideoAssetId: string | null;
   selectedAudioAssetId: string | null;
   promptFields: PromptFields;
+  staleState: Record<string, unknown>;
   generatedAssets: GeneratedAsset[];
   generationJobs: GenerationJob[];
   updatedAt: string;
@@ -455,6 +456,25 @@ export function ScenesWorkspace() {
     setIsBusy(false);
   }
 
+  async function clearStaleWarnings() {
+    if (!selectedPanel) {
+      return;
+    }
+
+    setIsBusy(true);
+    const response = await fetch(`/api/panels/${selectedPanel.id}/stale`, { method: "DELETE" });
+    const data = (await response.json()) as { panel?: Panel; error?: string };
+
+    if (data.panel) {
+      updatePanel(data.panel);
+      setStatus("Stale warnings cleared for this panel.");
+    } else {
+      setStatus(data.error ?? "Could not clear stale warnings.");
+    }
+
+    setIsBusy(false);
+  }
+
   function applyPromptDraftField(field: keyof Draft) {
     if (!promptDraft?.[field]) {
       return;
@@ -537,6 +557,7 @@ export function ScenesWorkspace() {
               <span>{String(panel.orderIndex).padStart(2, "0")}</span>
               <strong>{panel.title}</strong>
               <small>{panel.narrationText || "No narration yet"}</small>
+              {staleWarnings(panel).length ? <em>{staleWarnings(panel).length} stale</em> : null}
             </button>
           ))}
         </div>
@@ -573,7 +594,16 @@ export function ScenesWorkspace() {
 
         <div className={styles.warningBar} role="status">
           <strong>{hasPrompt ? "Generation requirements ready" : "Prompt required before generation"}</strong>
-          <span>References are optional here; missing-reference hard rules can be enforced later.</span>
+          <span>
+            {selectedPanel && staleWarnings(selectedPanel).length
+              ? `${staleWarnings(selectedPanel).length} stale warning(s). Review before export.`
+              : "References are optional here; missing-reference hard rules can be enforced later."}
+          </span>
+          {selectedPanel && staleWarnings(selectedPanel).length ? (
+            <button type="button" onClick={clearStaleWarnings} disabled={isBusy}>
+              Mark reviewed
+            </button>
+          ) : null}
         </div>
 
         <div className={styles.formGrid}>
@@ -638,6 +668,7 @@ export function ScenesWorkspace() {
 
         {selectedPanel ? (
           <>
+            <StaleWarnings panel={selectedPanel} onClear={clearStaleWarnings} isBusy={isBusy} />
             <AssetHistory panel={selectedPanel} onSelectAsset={selectAsset} isBusy={isBusy} />
             <DebugInspector jobs={selectedPanel.generationJobs} />
           </>
@@ -672,6 +703,33 @@ export function ScenesWorkspace() {
   }
 }
 
+function StaleWarnings({ panel, onClear, isBusy }: { panel: Panel; onClear: () => void; isBusy: boolean }) {
+  const warnings = staleWarnings(panel);
+
+  if (!warnings.length) {
+    return null;
+  }
+
+  return (
+    <section className={styles.staleSection}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <p>Stale dependencies</p>
+          <h4>Needs review</h4>
+        </div>
+        <button type="button" onClick={onClear} disabled={isBusy}>
+          Mark reviewed
+        </button>
+      </div>
+      <ul>
+        {warnings.map((warning) => (
+          <li key={warning}>{warning}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function AssetHistory({
   panel,
   onSelectAsset,
@@ -682,6 +740,7 @@ function AssetHistory({
   isBusy: boolean;
 }) {
   const assets = panel.generatedAssets ?? [];
+  const panelIsStale = staleWarnings(panel).length > 0;
 
   return (
     <section className={styles.assetSection}>
@@ -704,6 +763,7 @@ function AssetHistory({
               <div>
                 <strong>{asset.assetType.toLowerCase()}</strong>
                 <span>{asset.isSelected ? "selected" : "not selected"}</span>
+                {panelIsStale ? <span>panel stale</span> : null}
                 <small>{asset.durationSeconds ? `${asset.durationSeconds}s` : asset.mimeType}</small>
                 <small>{frameLabel(asset)}</small>
                 {canSelectAsset(asset) ? (
@@ -766,6 +826,12 @@ function frameLabel(asset: GeneratedAsset) {
 
 function canSelectAsset(asset: GeneratedAsset) {
   return asset.assetType === "IMAGE" || asset.assetType === "VIDEO" || asset.assetType === "AUDIO";
+}
+
+function staleWarnings(panel: Panel) {
+  return Object.entries(panel.staleState ?? {})
+    .filter(([key, value]) => key !== "updatedAt" && Boolean(value))
+    .map(([key, value]) => (typeof value === "string" ? value : key));
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

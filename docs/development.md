@@ -77,7 +77,7 @@ At this scaffold stage, `lint` delegates to `typecheck` to keep the command non-
 
 ## Current Scope
 
-Wave 5 export packaging is integrated:
+Wave 6 stale-state dependency behavior is integrated:
 
 1. Project, source material, Style Bible, entities, scenes, panels, and prompt compilation are backed by Prisma APIs.
 2. AI drafting exists for story analysis, entity extraction/mapping, Style Bible drafts, and panel prompt enhancement; drafts require explicit apply/save actions.
@@ -85,5 +85,6 @@ Wave 5 export packaging is integrated:
 4. Generated assets are stored through the local storage driver, preserved in panel history, and selected manually or by the explicit generation action.
 5. Panel debug inspector exposes recent generation jobs, compiled prompts, request payloads, response summaries, logs, errors, provider/model, and timing.
 6. Export readiness and ordered package generation create a downloadable ZIP with panel folders, selected assets, metadata JSON files, `timeline_manifest.json`, and `timeline_manifest.csv`.
+7. Source material, Style Bible, entity, panel field, reference, mapping, and panel-order changes mark dependent panels stale without triggering generation. Users can manually mark a panel reviewed.
 
-Real provider adapters, stale-state propagation, and queue-backed asynchronous execution are still planned work.
+Real provider adapters and queue-backed asynchronous execution are still planned work.

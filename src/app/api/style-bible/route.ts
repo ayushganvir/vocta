@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createStyleBiblePrismaClient, serializeStyleBible } from "@/features/style-bible/data";
 import { styleBiblePatchSchema } from "@/features/style-bible/schema";
+import { markPanelsStale } from "@/server/stale/service";
 
 const prisma = createStyleBiblePrismaClient();
 
@@ -32,6 +33,10 @@ export async function PATCH(request: Request) {
     where: { projectId },
     update: data,
     create: { projectId, ...data }
+  });
+  await markPanelsStale(prisma, {
+    projectId,
+    reason: "styleBibleChanged"
   });
 
   return NextResponse.json({ styleBible: serializeStyleBible(styleBible) });

@@ -163,8 +163,9 @@ Legend:
     - No Style Bible field is required before generation unless later changed.
     - Empty or weak style data shows warnings, not blockers.
 
-- [ ] [P0] [Backend] Mark related outputs stale when Style Bible changes
+- [x] [P0] [Backend] Mark related outputs stale when Style Bible changes
   - Source: Questionnaire sections 7, 18
+  - Implemented: Wave 6 marks project panels stale when the Style Bible is saved; no generation is triggered.
   - Acceptance:
     - Changing Style Bible marks panel prompts/assets stale.
     - No regeneration is triggered.
@@ -430,15 +431,17 @@ Legend:
 
 ## Phase 13: Stale State
 
-- [ ] [P0] [Backend] Implement stale warning rules
+- [x] [P0] [Backend] Implement stale warning rules
   - Source: Questionnaire section 18
+  - Implemented: Wave 6 adds a shared stale service and wires source material, Style Bible, mapped entity edits/deletes, panel text/prompt/reference/mapping edits, and panel reorder to stale warnings.
   - Acceptance:
     - Stale warnings are created when entity description/reference, Style Bible, narration, visual/motion intent, prompt layer, references, panel order/split/merge, or source material changes.
     - Model Stack changes can be added later unless selected.
     - Stale warnings never generate assets.
 
-- [ ] [P0] [Frontend] Show stale warnings in workflow
+- [x] [P0] [Frontend] Show stale warnings in workflow
   - Source: Questionnaire section 18
+  - Implemented: Wave 6 shows stale counts on panel cards, warning details in panel detail, panel-stale badges in asset history, export readiness warnings, and a manual Mark reviewed action.
   - Acceptance:
     - Warnings show on panel cards, panel detail, asset cards, and export readiness.
     - Manifest inclusion is open and handled by export decision.
@@ -495,8 +498,9 @@ Legend:
   - Acceptance:
     - Queued/running/completed/failed/retry/cancel paths are covered.
 
-- [ ] [P0] [Testing] Add stale-state tests
+- [x] [P0] [Testing] Add stale-state tests
   - Source: Questionnaire section 23
+  - Implemented: Wave 6 covers style/entity/panel stale triggers, clear-reviewed behavior, and verifies stale triggers do not create generation jobs.
   - Acceptance:
     - Selected stale triggers create warnings.
     - No stale trigger creates a generation job.

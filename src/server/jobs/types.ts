@@ -244,6 +244,7 @@ export interface AudioJobResult extends BaseJobResult<"audio"> {
 }
 
 export interface ExportJobPayload extends BaseJobPayload<"export"> {
+  exportPackageId: string;
   panelIds?: string[];
   format: "zip";
   includeJsonManifest: boolean;

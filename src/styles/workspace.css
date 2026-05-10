@@ -372,6 +372,175 @@ button,
   grid-template-columns: 100px 90px 90px 100px minmax(150px, 1fr);
 }
 
+.jobsWorkspace {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(420px, 1fr) minmax(360px, 0.95fr);
+  min-height: 0;
+}
+
+.jobsListPanel,
+.jobDetailPane {
+  min-width: 0;
+}
+
+.jobFilters {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(120px, 1fr)) auto;
+  margin-bottom: 12px;
+}
+
+.jobFilters label {
+  display: grid;
+  gap: 5px;
+}
+
+.jobFilters label span,
+.jobsStatus {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.jobsTableReal {
+  display: grid;
+  gap: 1px;
+  overflow-x: auto;
+}
+
+.jobsTableReal > div,
+.jobsTableReal > button {
+  align-items: center;
+  background: #131410;
+  border: 0;
+  border-radius: 0;
+  color: var(--foreground);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 92px 120px minmax(210px, 1.2fr) 112px minmax(170px, 1fr) minmax(110px, 0.8fr);
+  min-height: 44px;
+  min-width: 900px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.jobsTableReal > div {
+  background: #22231d;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  min-height: 36px;
+  text-transform: uppercase;
+}
+
+.jobsTableReal > button {
+  cursor: pointer;
+}
+
+.jobsTableReal > button:hover,
+.jobsTableReal > button.selected {
+  background: #1b1d18;
+}
+
+.jobsTableReal > button.selected {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.jobsTableReal span,
+.jobsTableReal strong,
+.jobDetailSummary span {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.jobStatusBadge {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: #d8d3c8;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 800;
+  justify-content: center;
+  line-height: 1;
+  padding: 5px 7px;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.status-queued {
+  border-color: #6b6540;
+  color: var(--warning);
+}
+
+.status-running {
+  border-color: #3b6571;
+  color: #8dd7e5;
+}
+
+.status-completed {
+  border-color: #477258;
+  color: var(--ok);
+}
+
+.status-failed {
+  border-color: #764742;
+  color: var(--danger);
+}
+
+.status-cancelled {
+  border-color: #585a50;
+  color: var(--muted);
+}
+
+.jobsStatus {
+  margin: 10px 0 0;
+}
+
+.jobDetailSummary {
+  background: #131410;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+.debugGrid {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-height: calc(100vh - 280px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.jobDebugBlock {
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+}
+
+.jobDebugBlock strong {
+  color: var(--accent);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.jobDebugBlock pre {
+  color: #d8d1c2;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
 .infoCard,
 .referenceTile {
   padding: 12px;
@@ -419,7 +588,8 @@ button,
 }
 
 textarea,
-input {
+input,
+select {
   background: #10110f;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -649,6 +819,8 @@ input {
   .sceneWorkspace,
   .fieldGrid,
   .referenceGrid,
+  .jobsWorkspace,
+  .jobFilters,
   .rightInspector {
     grid-template-columns: 1fr;
   }

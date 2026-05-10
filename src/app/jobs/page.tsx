@@ -1,10 +1,10 @@
 import { AppShell } from "@/components/workspace/app-shell";
-import { WorkspaceRoute } from "@/components/workspace/screens";
+import { JobsWorkspace } from "@/features/jobs/jobs-workspace";
 
 export default function JobsPage() {
   return (
     <AppShell activeScreen="jobs">
-      <WorkspaceRoute screen="jobs" />
+      <JobsWorkspace />
     </AppShell>
   );
 }

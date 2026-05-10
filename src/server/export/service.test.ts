@@ -3,15 +3,22 @@ import { closeSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { PrismaClient } from "@prisma/client";
 import { ExportPackageStatus, SourceMaterialType } from "@prisma/client";
 import type * as PrismaClientModule from "@prisma/client";
 import type * as Repositories from "@/server/db/repositories";
 import { generatePanelAudio, generatePanelImage, generatePanelVideo } from "@/server/generation/service";
+import type { VoctaQueueMap } from "@/server/jobs/queues";
+import type { ExportJobPayload } from "@/server/jobs/types";
 import { LocalStorageDriver } from "@/server/storage/local";
-import { createOrderedExportPackage, getExportReadiness } from "./service";
+import {
+  createOrderedExportPackage,
+  executeOrderedExportPackage,
+  getExportReadiness,
+  requestOrderedExportPackage
+} from "./service";
 
 let prisma: PrismaClient;
 let tempDir: string;
@@ -141,5 +148,80 @@ describe("export service", () => {
     );
     const zipHeader = Array.from(zipObject.bytes.slice(0, 4));
     expect(zipHeader).toEqual([0x50, 0x4b, 0x03, 0x04]);
+  });
+
+  it("queues export packages and lets execution complete the existing package", async () => {
+    const user = await prisma.user.create({
+      data: { name: "Queued Export User", email: "queued-export@vocta.local" }
+    });
+    const team = await prisma.team.create({
+      data: { name: "Queued Export Team", slug: "queued-export-team" }
+    });
+    const project = await repositories.createProject(prisma, {
+      teamId: team.id,
+      createdById: user.id,
+      title: "Queued Export Test",
+      slug: "queued-export-test"
+    });
+    await repositories.addSourceMaterial(prisma, {
+      projectId: project.id,
+      createdById: user.id,
+      type: SourceMaterialType.SCRIPT,
+      title: "Script",
+      bodyText: "A queued export story."
+    });
+    const scene = await repositories.createScene(prisma, {
+      projectId: project.id,
+      orderIndex: 1,
+      title: "Opening"
+    });
+    const panel = await repositories.createPanel(prisma, {
+      projectId: project.id,
+      sceneId: scene.id,
+      title: "Queued export panel",
+      narrationText: "The package waits in the queue.",
+      visualIntent: "A vertical package preview.",
+      motionIntent: "Slow push."
+    });
+
+    await generatePanelImage(prisma, { panelId: panel.id }, { storage });
+    await generatePanelVideo(prisma, { panelId: panel.id, durationSeconds: 5 }, { storage });
+    await generatePanelAudio(prisma, { panelId: panel.id, format: "wav" }, { storage });
+
+    const add = vi.fn().mockResolvedValue({ id: "queued-export-job" });
+    const queues = {
+      prompt: { add: vi.fn() },
+      image: { add: vi.fn() },
+      video: { add: vi.fn() },
+      audio: { add: vi.fn() },
+      export: { add }
+    } as unknown as VoctaQueueMap;
+
+    const queued = await requestOrderedExportPackage(prisma, {
+      projectId: project.id,
+      queues,
+      now: () => new Date("2026-05-10T05:00:00.000Z")
+    });
+
+    expect(queued.exportPackage.status).toBe(ExportPackageStatus.QUEUED);
+    expect(queued.queueJobId).toBe("queued-export-job");
+    expect(add).toHaveBeenCalledWith("export", expect.objectContaining({ exportPackageId: queued.exportPackage.id }), expect.objectContaining({
+      jobId: queued.exportPackage.id,
+      attempts: 1
+    }));
+
+    const payload = add.mock.calls[0]![1] as ExportJobPayload;
+    const result = await executeOrderedExportPackage(prisma, payload, {
+      storage,
+      now: () => new Date("2026-05-10T05:00:00.000Z")
+    });
+
+    expect(result.packagePath).toContain("/api/storage/local/exports/");
+    const exportPackage = await prisma.exportPackage.findUniqueOrThrow({
+      where: { id: queued.exportPackage.id }
+    });
+    expect(exportPackage.status).toBe(ExportPackageStatus.COMPLETED);
+    expect(exportPackage.zipFileUrl).toBe(result.packagePath);
+    expect(exportPackage.manifestJsonAssetId).toBeTruthy();
   });
 });

@@ -3,12 +3,14 @@ import { closeSync, mkdtempSync, openSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { PrismaClient } from "@prisma/client";
 import { AssetType, GenerationJobType, JobStatus, SourceMaterialType } from "@prisma/client";
 import type * as PrismaClientModule from "@prisma/client";
 import type * as Repositories from "@/server/db/repositories";
+import type { ImageJobPayload } from "@/server/jobs/types";
+import type { VoctaQueueMap } from "@/server/jobs/queues";
 import { LocalStorageDriver } from "@/server/storage/local";
 import type * as GenerationService from "./service";
 
@@ -155,5 +157,61 @@ describe("generation service", () => {
     expect(jobs.every((job) => Boolean(job.compiledPrompt))).toBe(true);
     expect(jobs.every((job) => Array.isArray(job.inputLayers))).toBe(true);
     expect(jobs.every((job) => Array.isArray(job.outputAssetIds))).toBe(true);
+  });
+
+  it("queues image generation first and executes the stored payload later", async () => {
+    const user = await prisma.user.create({
+      data: { name: "Queued Generation User", email: "queued-generation@vocta.local" }
+    });
+    const team = await prisma.team.create({
+      data: { name: "Queued Generation Team", slug: "queued-generation-team" }
+    });
+    const project = await repositories.createProject(prisma, {
+      teamId: team.id,
+      createdById: user.id,
+      title: "Queued Generation Test",
+      slug: "queued-generation-test"
+    });
+    const scene = await repositories.createScene(prisma, {
+      projectId: project.id,
+      orderIndex: 1,
+      title: "Opening"
+    });
+    const panel = await repositories.createPanel(prisma, {
+      projectId: project.id,
+      sceneId: scene.id,
+      title: "Queued panel",
+      narrationText: "A queued image begins.",
+      visualIntent: "A vertical frame held for generation.",
+      motionIntent: "Static keyframe."
+    });
+    const add = vi.fn().mockResolvedValue({ id: "queued-image-job" });
+    const queues = {
+      prompt: { add: vi.fn() },
+      image: { add },
+      video: { add: vi.fn() },
+      audio: { add: vi.fn() },
+      export: { add: vi.fn() }
+    } as unknown as VoctaQueueMap;
+
+    const queued = await generation.requestPanelImage(prisma, { panelId: panel.id }, { queues });
+
+    expect(queued.job.status).toBe(JobStatus.QUEUED);
+    expect(queued.queueJobId).toBe("queued-image-job");
+    expect(add).toHaveBeenCalledWith("image", expect.objectContaining({ generationJobId: queued.job.id }), expect.objectContaining({
+      jobId: queued.job.id,
+      attempts: 1
+    }));
+    await expect(prisma.generatedAsset.count({ where: { panelId: panel.id } })).resolves.toBe(0);
+
+    const storedJob = await prisma.generationJob.findUniqueOrThrow({ where: { id: queued.job.id } });
+    await generation.executeQueuedGenerationJob(prisma, storedJob.requestPayload as unknown as ImageJobPayload, { storage });
+
+    const completedJob = await prisma.generationJob.findUniqueOrThrow({ where: { id: queued.job.id } });
+    expect(completedJob.status).toBe(JobStatus.COMPLETED);
+    expect(Array.isArray(completedJob.outputAssetIds)).toBe(true);
+
+    const selectedPanel = await prisma.panel.findUniqueOrThrow({ where: { id: panel.id } });
+    expect(selectedPanel.selectedImageAssetId).toBeTruthy();
   });
 });

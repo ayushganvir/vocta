@@ -6,6 +6,8 @@ import {
   createTimelineManifest,
   type DbClient
 } from "@/server/db/repositories";
+import { createQueues, enqueueGenerationJob, type VoctaQueueMap } from "@/server/jobs/queues";
+import type { ExportJobPayload, ExportJobResult } from "@/server/jobs/types";
 import { LocalStorageDriver } from "@/server/storage/local";
 import type { StorageDriver } from "@/server/storage/types";
 import { staleWarnings } from "@/server/stale/service";
@@ -138,6 +140,15 @@ type CreateExportOptions = {
   now?: () => Date;
 };
 
+type RequestExportOptions = CreateExportOptions & {
+  queues?: VoctaQueueMap;
+};
+
+export type QueuedExportPackageResult = {
+  exportPackage: Awaited<ReturnType<typeof createExportPackage>>;
+  queueJobId?: string;
+};
+
 export async function getExportReadiness(db: DbClient, projectId?: string | null): Promise<ExportReadiness> {
   const project = await loadProjectForExport(db, projectId);
 
@@ -196,101 +207,227 @@ export async function createOrderedExportPackage(
     throw new Error("Create or seed a project before exporting.");
   }
 
-  const storage = options.storage ?? new LocalStorageDriver();
   const now = options.now?.() ?? new Date();
   const panels = orderedPanels(project);
-  const rootFolder = `${slugify(project.title)}_export_${timestampSlug(now)}`;
   const exportPackage = await createExportPackage(db, {
     projectId: project.id,
     status: ExportPackageStatus.RUNNING,
     includedPanelIds: panels.map((panel) => panel.id),
     logs: [{ at: now.toISOString(), message: "Manual ordered package export started." }]
   });
-  const manifest = buildManifest({
-    project,
-    panels,
-    packageId: exportPackage.id,
-    rootFolder,
-    timestamp: now.toISOString(),
-    includeCsv: options.includeCsv ?? true
-  });
-  const csv = createCsvManifest(manifest);
-  const zipEntries = await buildZipEntries(storage, rootFolder, manifest, panels);
 
-  zipEntries.push(
-    textEntry(`${rootFolder}/timeline_manifest.json`, JSON.stringify(manifest, null, 2)),
-    textEntry(`${rootFolder}/timeline_manifest.csv`, csv)
-  );
-
-  const zipBytes = createUncompressedZip(zipEntries);
-  const basePath = `exports/${project.id}/${exportPackage.id}`;
-  const [zipObject, manifestObject, csvObject] = await Promise.all([
-    storage.putObject({
-      path: `${basePath}/${rootFolder}.zip`,
-      bytes: zipBytes,
-      contentType: "application/zip",
-      metadata: { projectId: project.id, exportPackageId: exportPackage.id }
-    }),
-    storage.putObject({
-      path: `${basePath}/timeline_manifest.json`,
-      bytes: encodeText(JSON.stringify(manifest, null, 2)),
-      contentType: "application/json",
-      metadata: { projectId: project.id, exportPackageId: exportPackage.id }
-    }),
-    storage.putObject({
-      path: `${basePath}/timeline_manifest.csv`,
-      bytes: encodeText(csv),
-      contentType: "text/csv",
-      metadata: { projectId: project.id, exportPackageId: exportPackage.id }
-    })
-  ]);
-  const [manifestJsonAsset, manifestCsvAsset] = await Promise.all([
-    createGeneratedAsset(db, {
-      projectId: project.id,
-      assetType: AssetType.FILE,
-      fileUrl: manifestObject.url,
-      previewUrl: manifestObject.url,
-      storagePath: manifestObject.path,
-      mimeType: "application/json",
-      metadata: { exportPackageId: exportPackage.id, kind: "timeline_manifest_json" }
-    }),
-    createGeneratedAsset(db, {
-      projectId: project.id,
-      assetType: AssetType.FILE,
-      fileUrl: csvObject.url,
-      previewUrl: csvObject.url,
-      storagePath: csvObject.path,
-      mimeType: "text/csv",
-      metadata: { exportPackageId: exportPackage.id, kind: "timeline_manifest_csv" }
-    })
-  ]);
-  await db.exportPackage.update({
-    where: { id: exportPackage.id },
-    data: {
-      status: ExportPackageStatus.COMPLETED,
-      zipFileUrl: zipObject.url,
-      manifestJsonAssetId: manifestJsonAsset.id,
-      manifestCsvAssetId: manifestCsvAsset.id,
-      completedAt: new Date(),
-      logs: [
-        { at: now.toISOString(), message: "Manual ordered package export started." },
-        { at: new Date().toISOString(), message: `Created ZIP with ${zipEntries.length} entries.` }
-      ]
-    }
-  });
-  await createTimelineManifest(db, {
+  return executeOrderedExportPackage(db, {
+    jobType: "export",
     projectId: project.id,
     exportPackageId: exportPackage.id,
-    manifestJson: manifest as unknown as Prisma.InputJsonValue,
-    manifestCsv: csv
-  });
-
-  return {
+    requestedAt: now.toISOString(),
+    panelIds: panels.map((panel) => panel.id),
+    format: "zip",
+    includeJsonManifest: true,
+    includeCsvManifest: options.includeCsv ?? true
+  }, options).then((result) => ({
     exportPackageId: exportPackage.id,
-    zipFileUrl: zipObject.url,
-    manifest,
-    csv
+    zipFileUrl: result.packagePath,
+    manifest: result.metadata?.manifest as TimelineManifestJson,
+    csv: typeof result.metadata?.csv === "string" ? result.metadata.csv : ""
+  }));
+}
+
+export async function requestOrderedExportPackage(
+  db: DbClient,
+  options: RequestExportOptions = {}
+): Promise<QueuedExportPackageResult> {
+  const project = await loadProjectForExport(db, options.projectId);
+
+  if (!project) {
+    throw new Error("Create or seed a project before exporting.");
+  }
+
+  const now = options.now?.() ?? new Date();
+  const panels = orderedPanels(project);
+  const exportPackage = await createExportPackage(db, {
+    projectId: project.id,
+    status: ExportPackageStatus.QUEUED,
+    includedPanelIds: panels.map((panel) => panel.id),
+    logs: [{ at: now.toISOString(), message: "Manual ordered package export queued." }]
+  });
+  const payload: ExportJobPayload = {
+    jobType: "export",
+    projectId: project.id,
+    exportPackageId: exportPackage.id,
+    requestedAt: now.toISOString(),
+    panelIds: panels.map((panel) => panel.id),
+    format: "zip",
+    includeJsonManifest: true,
+    includeCsvManifest: options.includeCsv ?? true
   };
+
+  try {
+    const queues = options.queues ?? createQueues();
+    const queueJob = await enqueueGenerationJob(queues, payload, { jobId: exportPackage.id });
+
+    return { exportPackage, queueJobId: queueJob.id };
+  } catch (error) {
+    const failedAt = options.now?.() ?? new Date();
+    await db.exportPackage.update({
+      where: { id: exportPackage.id },
+      data: {
+        status: ExportPackageStatus.FAILED,
+        completedAt: failedAt,
+        errorPayload: serializeError(error) as Prisma.InputJsonValue,
+        logs: [
+          { at: now.toISOString(), message: "Manual ordered package export queued." },
+          { at: failedAt.toISOString(), message: "Export enqueue failed." }
+        ]
+      }
+    });
+    throw error;
+  }
+}
+
+export async function executeOrderedExportPackage(
+  db: DbClient,
+  payload: ExportJobPayload,
+  options: CreateExportOptions = {}
+): Promise<ExportJobResult> {
+  const storage = options.storage ?? new LocalStorageDriver();
+  const startedAt = options.now?.() ?? new Date();
+  const exportPackage = await db.exportPackage.findUniqueOrThrow({
+    where: { id: payload.exportPackageId }
+  });
+  const project = await loadProjectForExport(db, exportPackage.projectId);
+
+  if (!project) {
+    throw new Error("Export package project no longer exists.");
+  }
+
+  if (exportPackage.status !== ExportPackageStatus.RUNNING) {
+    await db.exportPackage.update({
+      where: { id: exportPackage.id },
+      data: {
+        status: ExportPackageStatus.RUNNING,
+        logs: appendLog(exportPackage.logs, {
+          at: startedAt.toISOString(),
+          message: "Ordered package export started by worker."
+        })
+      }
+    });
+  }
+
+  try {
+    const panels = orderedPanels(project).filter(
+      (panel) => !payload.panelIds?.length || payload.panelIds.includes(panel.id)
+    );
+    const rootFolder = `${slugify(project.title)}_export_${timestampSlug(startedAt)}`;
+    const manifest = buildManifest({
+      project,
+      panels,
+      packageId: exportPackage.id,
+      rootFolder,
+      timestamp: startedAt.toISOString(),
+      includeCsv: payload.includeCsvManifest
+    });
+    const csv = createCsvManifest(manifest);
+    const zipEntries = await buildZipEntries(storage, rootFolder, manifest, panels);
+
+    zipEntries.push(
+      textEntry(`${rootFolder}/timeline_manifest.json`, JSON.stringify(manifest, null, 2)),
+      ...(payload.includeCsvManifest ? [textEntry(`${rootFolder}/timeline_manifest.csv`, csv)] : [])
+    );
+
+    const zipBytes = createUncompressedZip(zipEntries);
+    const basePath = `exports/${project.id}/${exportPackage.id}`;
+    const completedAt = options.now?.() ?? new Date();
+    const [zipObject, manifestObject, csvObject] = await Promise.all([
+      storage.putObject({
+        path: `${basePath}/${rootFolder}.zip`,
+        bytes: zipBytes,
+        contentType: "application/zip",
+        metadata: { projectId: project.id, exportPackageId: exportPackage.id }
+      }),
+      storage.putObject({
+        path: `${basePath}/timeline_manifest.json`,
+        bytes: encodeText(JSON.stringify(manifest, null, 2)),
+        contentType: "application/json",
+        metadata: { projectId: project.id, exportPackageId: exportPackage.id }
+      }),
+      storage.putObject({
+        path: `${basePath}/timeline_manifest.csv`,
+        bytes: encodeText(csv),
+        contentType: "text/csv",
+        metadata: { projectId: project.id, exportPackageId: exportPackage.id }
+      })
+    ]);
+    const [manifestJsonAsset, manifestCsvAsset] = await Promise.all([
+      createGeneratedAsset(db, {
+        projectId: project.id,
+        assetType: AssetType.FILE,
+        fileUrl: manifestObject.url,
+        previewUrl: manifestObject.url,
+        storagePath: manifestObject.path,
+        mimeType: "application/json",
+        metadata: { exportPackageId: exportPackage.id, kind: "timeline_manifest_json" }
+      }),
+      createGeneratedAsset(db, {
+        projectId: project.id,
+        assetType: AssetType.FILE,
+        fileUrl: csvObject.url,
+        previewUrl: csvObject.url,
+        storagePath: csvObject.path,
+        mimeType: "text/csv",
+        metadata: { exportPackageId: exportPackage.id, kind: "timeline_manifest_csv" }
+      })
+    ]);
+    await db.exportPackage.update({
+      where: { id: exportPackage.id },
+      data: {
+        status: ExportPackageStatus.COMPLETED,
+        zipFileUrl: zipObject.url,
+        manifestJsonAssetId: manifestJsonAsset.id,
+        manifestCsvAssetId: manifestCsvAsset.id,
+        completedAt,
+        logs: [
+          { at: startedAt.toISOString(), message: "Ordered package export started by worker." },
+          { at: completedAt.toISOString(), message: `Created ZIP with ${zipEntries.length} entries.` }
+        ]
+      }
+    });
+    await createTimelineManifest(db, {
+      projectId: project.id,
+      exportPackageId: exportPackage.id,
+      manifestJson: manifest as unknown as Prisma.InputJsonValue,
+      manifestCsv: csv
+    });
+
+    return {
+      jobType: "export",
+      provider: "vocta",
+      model: "ordered-package-v1",
+      completedAt: completedAt.toISOString(),
+      summary: `Created ordered export package with ${manifest.panels.length} panel(s).`,
+      warnings: manifest.warnings.map((message) => ({ code: "export_warning", message, severity: "warning" as const })),
+      packagePath: zipObject.url,
+      manifestPath: manifestObject.url,
+      csvPath: csvObject.url,
+      assetCount: zipEntries.length,
+      metadata: { manifest, csv }
+    };
+  } catch (error) {
+    const failedAt = options.now?.() ?? new Date();
+    await db.exportPackage.update({
+      where: { id: exportPackage.id },
+      data: {
+        status: ExportPackageStatus.FAILED,
+        completedAt: failedAt,
+        errorPayload: serializeError(error) as Prisma.InputJsonValue,
+        logs: [
+          { at: startedAt.toISOString(), message: "Ordered package export started by worker." },
+          { at: failedAt.toISOString(), message: "Export package creation failed." }
+        ]
+      }
+    });
+    throw error;
+  }
 }
 
 function buildManifest(input: {
@@ -523,6 +660,25 @@ function jsonStringArray(value: Prisma.JsonValue) {
 function csvCell(value: unknown) {
   const text = String(value ?? "");
   return /[",\n]/.test(text) ? `"${text.replaceAll("\"", "\"\"")}"` : text;
+}
+
+function appendLog(existing: Prisma.JsonValue, entry: { at: string; message: string }) {
+  return [
+    ...(Array.isArray(existing) ? existing : []),
+    entry
+  ] as Prisma.InputJsonValue;
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    };
+  }
+
+  return { message: String(error) };
 }
 
 function slugify(value: string) {

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { serializePanel } from "@/app/api/scenes/_helpers";
 import { prisma } from "@/server/db";
-import { generatePanelVideo } from "@/server/generation/service";
+import { requestPanelVideo } from "@/server/generation/service";
 
 const videoGenerationSchema = z.object({
   panelId: z.string().min(1),
@@ -20,18 +20,10 @@ export async function POST(request: Request) {
     );
   }
 
-  await generatePanelVideo(prisma, parsed.data);
-  const panel = await loadPanel(parsed.data.panelId);
+  const { job, panel, queueJobId } = await requestPanelVideo(prisma, parsed.data);
 
-  return NextResponse.json({ panel: serializePanel(panel) });
-}
-
-async function loadPanel(panelId: string) {
-  return prisma.panel.findUniqueOrThrow({
-    where: { id: panelId },
-    include: {
-      generatedAssets: { orderBy: { createdAt: "desc" } },
-      generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
-    }
-  });
+  return NextResponse.json(
+    { job, queueJobId, panel: serializePanel(panel) },
+    { status: 202 }
+  );
 }

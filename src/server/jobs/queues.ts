@@ -50,9 +50,15 @@ export async function enqueueGenerationJob<TJobType extends JobType>(
   options: JobsOptions = {}
 ) {
   const queueKey = getQueueKeyForJobType(payload.jobType);
+  const stableJobId =
+    options.jobId ??
+    payload.generationJobId ??
+    (payload.jobType === "export" ? payload.exportPackageId : undefined);
+
   return queues[queueKey].add(payload.jobType, payload, {
     ...defaultJobOptions,
     ...options,
+    jobId: stableJobId,
     attempts: options.attempts ?? defaultJobOptions.attempts
   });
 }

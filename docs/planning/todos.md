@@ -281,6 +281,7 @@ Legend:
 
 - [ ] [P0] [Queue] Implement GenerationJob lifecycle
   - Source: Questionnaire section 15
+  - Progress: Wave 7 adds queued image/video/audio generation requests, worker execution paths, database-backed jobs list/detail, manual retry, and manual cancel.
   - Acceptance:
     - Job types include story analysis, Style Bible draft, entity extraction, scene/panel split, entity mapping, prompt generation/enhancement, image, video, audio, and export.
     - Statuses include queued, running, completed, failed, cancelled.
@@ -289,6 +290,7 @@ Legend:
 - [ ] [P0] [Queue] Implement queue update strategy
   - Source: Questionnaire section 15
   - Recommendation: start with polling; upgrade to SSE/WebSockets only if UX needs it.
+  - Progress: Wave 7 adds polling jobs UI, job detail refresh, manual retry, and manual cancel. Keep open until Redis/worker browser smoke verifies full local execution.
   - Acceptance:
     - UI can show queued/running/completed/failed states.
     - Manual retry is supported.
@@ -298,6 +300,7 @@ Legend:
 - [ ] [P0] [Queue] Implement concurrency settings
   - Source: Questionnaire section 15
   - Recommendation: prompt 10, image 5, video 2, audio 3 unless provider limits require lower values.
+  - Progress: queue concurrency config exists and worker uses queue-specific concurrency. Keep open until settings UI or environment documentation is finalized.
   - Acceptance:
     - Concurrency is configurable by environment/settings.
     - Video concurrency is lower than text/image because video jobs are slower and costlier.
@@ -308,8 +311,9 @@ Legend:
     - Adapters support validateInput, buildRequest, execute, parseResponse, saveAssets, estimateCost, redactPayload.
     - Capability warnings can be shown without disabling user workflow.
 
-- [ ] [P0] [Providers] Implement fake provider adapters for development/testing
+- [x] [P0] [Providers] Implement fake provider adapters for development/testing
   - Source: Questionnaire section 23
+  - Implemented: fake text/image/video/audio providers support AI drafts, media generation, queued worker execution tests, and export package tests without real API keys.
   - Acceptance:
     - Fake text/image/video/audio adapters run without paid API calls.
     - Fake adapters create realistic records and placeholder assets.
@@ -493,8 +497,9 @@ Legend:
     - Automated tests do not require real API keys.
     - Real providers can be tested manually/staging with environment variables.
 
-- [ ] [P0] [Testing] Add queue/job lifecycle tests
+- [x] [P0] [Testing] Add queue/job lifecycle tests
   - Source: Questionnaire section 23
+  - Implemented: Wave 7 covers jobs list/detail, manual retry, retry enqueue payloads, manual cancel, queued media request records, worker execution, and queued export package completion.
   - Acceptance:
     - Queued/running/completed/failed/retry/cancel paths are covered.
 

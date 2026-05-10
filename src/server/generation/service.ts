@@ -7,7 +7,13 @@ import {
   updateGenerationJobStatus,
   type DbClient
 } from "@/server/db/repositories";
-import type { AudioJobPayload, GeneratedAssetContract, ImageJobPayload, VideoJobPayload } from "@/server/jobs/types";
+import { createQueues, enqueueGenerationJob, type VoctaQueueMap } from "@/server/jobs/queues";
+import type {
+  AudioJobPayload,
+  GeneratedAssetContract,
+  ImageJobPayload,
+  VideoJobPayload,
+} from "@/server/jobs/types";
 import { compilePanelPrompt, storePromptCompilation } from "@/server/prompting/service";
 import { createFakeProviderForJob, runProvider } from "@/server/providers/fake";
 import { LocalStorageDriver } from "@/server/storage/local";
@@ -38,9 +44,69 @@ type GenerationServiceOptions = {
   now?: () => Date;
 };
 
+type GenerationRequestOptions = GenerationServiceOptions & {
+  queues?: VoctaQueueMap;
+};
+
+type QueuedGenerationResult = {
+  job: Awaited<ReturnType<typeof createGenerationJob>>;
+  panel: Awaited<ReturnType<typeof loadPanelWithGenerationState>>;
+  queueJobId?: string;
+};
+
 const DEFAULT_ASPECT_RATIO = "9:16";
 
+export async function requestPanelImage(
+  db: DbClient,
+  input: GeneratePanelImageInput,
+  options: GenerationRequestOptions = {}
+): Promise<QueuedGenerationResult> {
+  const { job, payload } = await createImageGenerationRequest(db, input, options);
+  const queueJobId = await enqueueQueuedGenerationPayload(db, job.id, payload, options.queues);
+  const panel = await loadPanelWithGenerationState(db, input.panelId);
+
+  return { job: await db.generationJob.findUniqueOrThrow({ where: { id: job.id } }), panel, queueJobId };
+}
+
+export async function requestPanelVideo(
+  db: DbClient,
+  input: GeneratePanelVideoInput,
+  options: GenerationRequestOptions = {}
+): Promise<QueuedGenerationResult> {
+  const { job, payload } = await createVideoGenerationRequest(db, input, options);
+  const queueJobId = await enqueueQueuedGenerationPayload(db, job.id, payload, options.queues);
+  const panel = await loadPanelWithGenerationState(db, input.panelId);
+
+  return { job: await db.generationJob.findUniqueOrThrow({ where: { id: job.id } }), panel, queueJobId };
+}
+
+export async function requestPanelAudio(
+  db: DbClient,
+  input: GeneratePanelAudioInput,
+  options: GenerationRequestOptions = {}
+): Promise<QueuedGenerationResult> {
+  const { job, payload } = await createAudioGenerationRequest(db, input, options);
+  const queueJobId = await enqueueQueuedGenerationPayload(db, job.id, payload, options.queues);
+  const panel = await loadPanelWithGenerationState(db, input.panelId);
+
+  return { job: await db.generationJob.findUniqueOrThrow({ where: { id: job.id } }), panel, queueJobId };
+}
+
 export async function generatePanelImage(
+  db: DbClient,
+  input: GeneratePanelImageInput,
+  options: GenerationServiceOptions = {}
+) {
+  const { job, payload, frameRole } = await createImageGenerationRequest(db, input, options);
+
+  return runMediaJob(db, job.id, payload, {
+    storage: options.storage,
+    now: options.now,
+    onAssetCreated: imageSelectionHandler(db, input.panelId, frameRole)
+  });
+}
+
+async function createImageGenerationRequest(
   db: DbClient,
   input: GeneratePanelImageInput,
   options: GenerationServiceOptions = {}
@@ -79,27 +145,34 @@ export async function generatePanelImage(
     frameRole,
     references: compiled.attachedReferenceAssetIds.map((id) => ({ id, type: "asset" }))
   };
+  await db.generationJob.update({
+    where: { id: job.id },
+    data: {
+      requestPayload: payload as unknown as Prisma.InputJsonValue,
+      logs: [{ at: payload.requestedAt, message: "Manual image generation queued." }]
+    }
+  });
+
+  return { job, payload, frameRole };
+}
+
+export async function generatePanelVideo(
+  db: DbClient,
+  input: GeneratePanelVideoInput,
+  options: GenerationServiceOptions = {}
+) {
+  const { job, payload } = await createVideoGenerationRequest(db, input, options);
 
   return runMediaJob(db, job.id, payload, {
     storage: options.storage,
     now: options.now,
     onAssetCreated: async (assetId) => {
-      if (frameRole === "first_frame") {
-        await selectPanelFrameAsset(db, input.panelId, assetId, "firstFrameAssetId");
-        return;
-      }
-
-      if (frameRole === "last_frame") {
-        await selectPanelFrameAsset(db, input.panelId, assetId, "lastFrameAssetId");
-        return;
-      }
-
-      await selectPanelPrimaryImageAsset(db, input.panelId, assetId);
+      await selectPanelAsset(db, input.panelId, assetId, AssetType.VIDEO);
     }
   });
 }
 
-export async function generatePanelVideo(
+async function createVideoGenerationRequest(
   db: DbClient,
   input: GeneratePanelVideoInput,
   options: GenerationServiceOptions = {}
@@ -154,17 +227,34 @@ export async function generatePanelVideo(
     sourceImageAssetIds,
     references: compiled.attachedReferenceAssetIds.map((id) => ({ id, type: "asset" }))
   };
+  await db.generationJob.update({
+    where: { id: job.id },
+    data: {
+      requestPayload: payload as unknown as Prisma.InputJsonValue,
+      logs: [{ at: payload.requestedAt, message: "Manual video generation queued." }]
+    }
+  });
+
+  return { job, payload };
+}
+
+export async function generatePanelAudio(
+  db: DbClient,
+  input: GeneratePanelAudioInput,
+  options: GenerationServiceOptions = {}
+) {
+  const { job, payload } = await createAudioGenerationRequest(db, input, options);
 
   return runMediaJob(db, job.id, payload, {
     storage: options.storage,
     now: options.now,
     onAssetCreated: async (assetId) => {
-      await selectPanelAsset(db, input.panelId, assetId, AssetType.VIDEO);
+      await selectPanelAsset(db, input.panelId, assetId, AssetType.AUDIO);
     }
   });
 }
 
-export async function generatePanelAudio(
+async function createAudioGenerationRequest(
   db: DbClient,
   input: GeneratePanelAudioInput,
   options: GenerationServiceOptions = {}
@@ -225,14 +315,54 @@ export async function generatePanelAudio(
     emotion: input.emotion ?? undefined,
     format
   };
-
-  return runMediaJob(db, job.id, payload, {
-    storage: options.storage,
-    now: options.now,
-    onAssetCreated: async (assetId) => {
-      await selectPanelAsset(db, input.panelId, assetId, AssetType.AUDIO);
+  await db.generationJob.update({
+    where: { id: job.id },
+    data: {
+      requestPayload: payload as unknown as Prisma.InputJsonValue,
+      logs: [{ at: payload.requestedAt, message: "Manual audio generation queued." }]
     }
   });
+
+  return { job, payload };
+}
+
+export async function executeQueuedGenerationJob(
+  db: DbClient,
+  payload: ImageJobPayload | VideoJobPayload | AudioJobPayload,
+  options: GenerationServiceOptions = {}
+) {
+  if (!payload.generationJobId) {
+    throw new Error("Queued generation payload is missing generationJobId.");
+  }
+
+  const existingJob = await db.generationJob.findUniqueOrThrow({
+    where: { id: payload.generationJobId },
+    select: { status: true }
+  });
+
+  if (existingJob.status === JobStatus.CANCELLED) {
+    return {
+      jobType: payload.jobType,
+      provider: "vocta",
+      model: "cancelled",
+      completedAt: nowIso(options.now),
+      summary: "Generation job was cancelled before execution.",
+      warnings: [],
+      metadata: { generationJobId: payload.generationJobId, cancelled: true }
+    };
+  }
+
+  const result = await runMediaJob(db, payload.generationJobId, payload, {
+    storage: options.storage,
+    now: options.now,
+    onAssetCreated: assetSelectionHandler(db, payload)
+  });
+
+  if (result.job.status === JobStatus.FAILED) {
+    throw new Error(`Generation job ${payload.generationJobId} failed.`);
+  }
+
+  return result.providerResult;
 }
 
 async function runMediaJob<TPayload extends ImageJobPayload | VideoJobPayload | AudioJobPayload>(
@@ -274,7 +404,7 @@ async function runMediaJob<TPayload extends ImageJobPayload | VideoJobPayload | 
       ]
     });
 
-    return { job: completed, assetIds };
+    return { job: completed, assetIds, providerResult: result };
   } catch (error) {
     const failedAt = options.now?.() ?? new Date();
     const failed = await updateGenerationJobStatus(db, generationJobId, JobStatus.FAILED, {
@@ -286,8 +416,70 @@ async function runMediaJob<TPayload extends ImageJobPayload | VideoJobPayload | 
       ]
     });
 
-    return { job: failed, assetIds: [] };
+    return { job: failed, assetIds: [], providerResult: null };
   }
+}
+
+async function enqueueQueuedGenerationPayload(
+  db: DbClient,
+  generationJobId: string,
+  payload: ImageJobPayload | VideoJobPayload | AudioJobPayload,
+  queues = createQueues()
+) {
+  try {
+    const queueJob = await enqueueGenerationJob(queues, payload, { jobId: generationJobId });
+    return queueJob.id;
+  } catch (error) {
+    await updateGenerationJobStatus(db, generationJobId, JobStatus.FAILED, {
+      errorPayload: serializeError(error) as Prisma.InputJsonValue,
+      logs: [
+        { at: nowIso(), message: "Generation enqueue failed." }
+      ]
+    });
+    throw error;
+  }
+}
+
+function imageSelectionHandler(db: DbClient, panelId: string, frameRole: ImageFrameRole) {
+  return async (assetId: string) => {
+    if (frameRole === "first_frame") {
+      await selectPanelFrameAsset(db, panelId, assetId, "firstFrameAssetId");
+      return;
+    }
+
+    if (frameRole === "last_frame") {
+      await selectPanelFrameAsset(db, panelId, assetId, "lastFrameAssetId");
+      return;
+    }
+
+    await selectPanelPrimaryImageAsset(db, panelId, assetId);
+  };
+}
+
+function assetSelectionHandler(db: DbClient, payload: ImageJobPayload | VideoJobPayload | AudioJobPayload) {
+  if (payload.jobType === "image") {
+    return imageSelectionHandler(db, payload.panelId, payload.frameRole ?? "image");
+  }
+
+  if (payload.jobType === "video") {
+    return async (assetId: string) => {
+      await selectPanelAsset(db, payload.panelId, assetId, AssetType.VIDEO);
+    };
+  }
+
+  return async (assetId: string) => {
+    await selectPanelAsset(db, payload.panelId, assetId, AssetType.AUDIO);
+  };
+}
+
+async function loadPanelWithGenerationState(db: DbClient, panelId: string) {
+  return db.panel.findUniqueOrThrow({
+    where: { id: panelId },
+    include: {
+      generatedAssets: { orderBy: { createdAt: "desc" } },
+      generationJobs: { orderBy: { createdAt: "desc" }, take: 12 }
+    }
+  });
 }
 
 async function persistGeneratedAsset<TPayload extends ImageJobPayload | VideoJobPayload | AudioJobPayload>(

@@ -346,6 +346,72 @@
   font-size: 12px;
 }
 
+.preflightPanel {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, var(--line));
+  background: #211f18;
+  padding: 12px;
+}
+
+.preflightPanel ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+}
+
+.preflightPanel li {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--line));
+  background: #15140f;
+  padding: 8px 10px;
+}
+
+.preflightPanel li strong {
+  color: var(--warning);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.preflightPanel li span {
+  color: #ded7c7;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.preflightPanel li.infoWarning {
+  border-color: #3f5e62;
+  background: #11191a;
+}
+
+.preflightPanel li.infoWarning strong {
+  color: #8dd7e5;
+}
+
+.preflightActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preflightActions button {
+  min-height: 30px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.preflightActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .assetGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -358,7 +424,9 @@
   background: var(--panel-soft);
 }
 
-.assetCard img,
+.assetPreview,
+.audioPreview,
+.filePreview,
 .assetPlaceholder {
   display: block;
   width: 100%;
@@ -367,6 +435,16 @@
   background: #111827;
 }
 
+.assetPreview {
+  max-height: 360px;
+}
+
+.assetCard video.assetPreview {
+  object-fit: contain;
+}
+
+.audioPreview,
+.filePreview,
 .assetPlaceholder {
   display: grid;
   place-items: center;
@@ -375,10 +453,54 @@
   font-weight: 800;
 }
 
-.assetCard div {
+.audioPreview,
+.filePreview {
+  align-content: center;
+  gap: 10px;
+  padding: 12px;
+  text-align: center;
+}
+
+.audioPreview audio {
+  width: 100%;
+  max-width: 100%;
+}
+
+.filePreview strong,
+.assetPlaceholder strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.filePreview span,
+.assetPlaceholder span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filePreview a {
+  justify-self: center;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-strong);
+  color: var(--foreground);
+  padding: 7px 10px;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.assetBody {
   display: grid;
-  gap: 3px;
+  gap: 7px;
   padding: 8px;
+}
+
+.assetTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .assetCard strong {
@@ -392,6 +514,38 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.assetMetadata {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.assetMetadata div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+.assetMetadata dt,
+.assetMetadata dd {
+  overflow: hidden;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assetMetadata dt {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.assetMetadata dd {
+  color: var(--foreground);
 }
 
 .assetCard button {

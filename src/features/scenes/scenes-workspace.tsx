@@ -69,6 +69,7 @@ type GeneratedAsset = {
   assetType: "IMAGE" | "VIDEO" | "AUDIO" | "REFERENCE" | "FILE";
   fileUrl: string;
   previewUrl: string | null;
+  storagePath?: string;
   mimeType: string;
   durationSeconds: number | null;
   width: number | null;
@@ -123,6 +124,21 @@ type VideoOptions = {
   aspectRatio: VideoSettings["aspectRatio"];
   resolution: VideoSettings["resolution"];
   sourceMode: VideoSettings["sourceMode"];
+};
+
+type PreflightWarning = {
+  code: string;
+  severity: "info" | "warning";
+  message: string;
+  targetId?: string;
+};
+
+type PendingGeneration = {
+  label: string;
+  endpoint: string;
+  payload: Record<string, unknown>;
+  successMessage: string;
+  warnings: PreflightWarning[];
 };
 
 type ScenesResponse = {
@@ -189,6 +205,7 @@ export function ScenesWorkspace() {
     resolution: "720p",
     sourceMode: "text_to_video"
   });
+  const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(null);
   const [entities, setEntities] = useState<EntityOption[]>([]);
   const [status, setStatus] = useState("Loading scenes...");
   const [isBusy, setIsBusy] = useState(false);
@@ -228,9 +245,11 @@ export function ScenesWorkspace() {
       setDraft(panelToDraft(selectedPanel));
       setAudioOptions(audioSettingsToOptions(selectedPanel.audioSettings));
       setVideoOptions(videoSettingsToOptions(selectedPanel.videoSettings, selectedPanel.targetDurationSeconds));
+      setPendingGeneration(null);
       setSelectedPanelId(selectedPanel.id);
     } else {
       setDraft(emptyDraft);
+      setPendingGeneration(null);
     }
   }, [selectedPanel]);
 
@@ -455,10 +474,16 @@ export function ScenesWorkspace() {
       return;
     }
 
-    await runGeneration("/api/generation/image", {
-      panelId: selectedPanel.id,
-      frameRole
-    }, frameRole === "image" ? "Image generated and selected." : `${frameRole.replace("_", " ")} generated and selected.`);
+    await runGenerationWithPreflight({
+      label: frameRole === "image" ? "image generation" : `${frameRole.replace("_", " ")} generation`,
+      assetType: "image",
+      endpoint: "/api/generation/image",
+      payload: {
+        panelId: selectedPanel.id,
+        frameRole
+      },
+      successMessage: frameRole === "image" ? "Image generated and selected." : `${frameRole.replace("_", " ")} generated and selected.`
+    });
   }
 
   async function generateVideo() {
@@ -466,13 +491,20 @@ export function ScenesWorkspace() {
       return;
     }
 
-    await runGeneration("/api/generation/video", {
-      panelId: selectedPanel.id,
-      durationSeconds: toNullableInt(videoOptions.durationSeconds),
-      aspectRatio: videoOptions.aspectRatio,
-      resolution: videoOptions.resolution,
-      sourceMode: videoOptions.sourceMode
-    }, "Video generated and selected.");
+    await runGenerationWithPreflight({
+      label: "video generation",
+      assetType: "video",
+      sourceMode: videoOptions.sourceMode,
+      endpoint: "/api/generation/video",
+      payload: {
+        panelId: selectedPanel.id,
+        durationSeconds: toNullableInt(videoOptions.durationSeconds),
+        aspectRatio: videoOptions.aspectRatio,
+        resolution: videoOptions.resolution,
+        sourceMode: videoOptions.sourceMode
+      },
+      successMessage: "Video generated and selected."
+    });
   }
 
   async function generateAudio() {
@@ -480,18 +512,24 @@ export function ScenesWorkspace() {
       return;
     }
 
-    await runGeneration("/api/generation/audio", {
-      panelId: selectedPanel.id,
-      speakerEntityId: audioOptions.speakerEntityId || null,
-      voiceId: audioOptions.voiceId || null,
-      voiceLabel: audioOptions.voiceLabel || null,
-      voiceNotes: audioOptions.voiceNotes || null,
-      pace: audioOptions.pace,
-      emotion: audioOptions.emotion || null,
-      speakingRate: toNullableFloat(audioOptions.speakingRate),
-      pitch: toNullableFloat(audioOptions.pitch),
-      format: audioOptions.format
-    }, "Voiceover generated and selected.");
+    await runGenerationWithPreflight({
+      label: "voice generation",
+      assetType: "audio",
+      endpoint: "/api/generation/audio",
+      payload: {
+        panelId: selectedPanel.id,
+        speakerEntityId: audioOptions.speakerEntityId || null,
+        voiceId: audioOptions.voiceId || null,
+        voiceLabel: audioOptions.voiceLabel || null,
+        voiceNotes: audioOptions.voiceNotes || null,
+        pace: audioOptions.pace,
+        emotion: audioOptions.emotion || null,
+        speakingRate: toNullableFloat(audioOptions.speakingRate),
+        pitch: toNullableFloat(audioOptions.pitch),
+        format: audioOptions.format
+      },
+      successMessage: "Voiceover generated and selected."
+    });
   }
 
   function selectSpeakerEntity(entityId: string) {
@@ -506,6 +544,69 @@ export function ScenesWorkspace() {
       speakingRate: entity?.metadata.speakingRate === "" ? current.speakingRate : String(entity?.metadata.speakingRate ?? current.speakingRate),
       pitch: entity?.metadata.pitch === "" ? current.pitch : String(entity?.metadata.pitch ?? current.pitch)
     }));
+  }
+
+  async function runGenerationWithPreflight(input: {
+    label: string;
+    assetType: "image" | "video" | "audio";
+    sourceMode?: VideoSettings["sourceMode"];
+    endpoint: string;
+    payload: Record<string, unknown>;
+    successMessage: string;
+  }) {
+    if (!selectedPanel) {
+      return;
+    }
+
+    setIsBusy(true);
+    setStatus(`Checking ${input.label} warnings...`);
+    const response = await fetch("/api/generation/preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        panelId: selectedPanel.id,
+        assetType: input.assetType,
+        sourceMode: input.sourceMode
+      })
+    });
+    const data = (await response.json()) as {
+      ok?: boolean;
+      warnings?: PreflightWarning[];
+      canProceed?: boolean;
+      error?: string;
+    };
+    setIsBusy(false);
+
+    if (!response.ok || !data.ok) {
+      setStatus(data.error ?? `${input.label} preflight failed.`);
+      return;
+    }
+
+    const warnings = data.warnings ?? [];
+    if (warnings.length) {
+      setPendingGeneration({
+        label: input.label,
+        endpoint: input.endpoint,
+        payload: input.payload,
+        successMessage: input.successMessage,
+        warnings
+      });
+      setStatus(`${warnings.length} warning(s) found. Review before proceeding.`);
+      return;
+    }
+
+    setPendingGeneration(null);
+    await runGeneration(input.endpoint, input.payload, input.successMessage);
+  }
+
+  async function proceedWithPendingGeneration() {
+    if (!pendingGeneration) {
+      return;
+    }
+
+    const generation = pendingGeneration;
+    setPendingGeneration(null);
+    await runGeneration(generation.endpoint, generation.payload, generation.successMessage);
   }
 
   async function runGeneration(endpoint: string, payload: Record<string, unknown>, successMessage: string) {
@@ -801,6 +902,16 @@ export function ScenesWorkspace() {
           </section>
         </div>
 
+        <PreflightWarningPanel
+          pendingGeneration={pendingGeneration}
+          isBusy={isBusy}
+          onProceed={proceedWithPendingGeneration}
+          onDismiss={() => {
+            setPendingGeneration(null);
+            setStatus("Generation warning dismissed. No job was queued.");
+          }}
+        />
+
         <div className={styles.manualActions}>
           <button type="button" onClick={() => generateImage("image")} disabled={isBusy || !selectedPanel || !hasPrompt}>
             Generate image
@@ -884,6 +995,50 @@ function StaleWarnings({ panel, onClear, isBusy }: { panel: Panel; onClear: () =
   );
 }
 
+function PreflightWarningPanel({
+  pendingGeneration,
+  isBusy,
+  onProceed,
+  onDismiss
+}: {
+  pendingGeneration: PendingGeneration | null;
+  isBusy: boolean;
+  onProceed: () => void;
+  onDismiss: () => void;
+}) {
+  if (!pendingGeneration) {
+    return null;
+  }
+
+  return (
+    <section className={styles.preflightPanel} aria-label="Generation warnings">
+      <div className={styles.sectionHeader}>
+        <div>
+          <p>Preflight warnings</p>
+          <h4>{pendingGeneration.label}</h4>
+        </div>
+        <span>{pendingGeneration.warnings.length} warning(s)</span>
+      </div>
+      <ul>
+        {pendingGeneration.warnings.map((warning) => (
+          <li key={`${warning.code}-${warning.targetId ?? warning.message}`} className={warning.severity === "info" ? styles.infoWarning : undefined}>
+            <strong>{warning.code.replaceAll("_", " ").toLowerCase()}</strong>
+            <span>{warning.message}</span>
+          </li>
+        ))}
+      </ul>
+      <div className={styles.preflightActions}>
+        <button type="button" onClick={onProceed} disabled={isBusy}>
+          Proceed and queue job
+        </button>
+        <button type="button" onClick={onDismiss} disabled={isBusy}>
+          Dismiss
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function AssetHistory({
   panel,
   onSelectAsset,
@@ -909,17 +1064,21 @@ function AssetHistory({
         <div className={styles.assetGrid}>
           {assets.map((asset) => (
             <article key={asset.id} className={styles.assetCard}>
-              {asset.assetType === "IMAGE" ? (
-                <img src={asset.previewUrl ?? asset.fileUrl} alt="" />
-              ) : (
-                <div className={styles.assetPlaceholder}>{asset.assetType}</div>
-              )}
-              <div>
-                <strong>{asset.assetType.toLowerCase()}</strong>
-                <span>{asset.isSelected ? "selected" : "not selected"}</span>
+              <AssetPreview asset={asset} />
+              <div className={styles.assetBody}>
+                <div className={styles.assetTitleRow}>
+                  <strong>{asset.assetType.toLowerCase()}</strong>
+                  <span>{asset.isSelected ? "selected" : "not selected"}</span>
+                </div>
                 {panelIsStale ? <span>panel stale</span> : null}
-                <small>{asset.durationSeconds ? `${asset.durationSeconds}s` : asset.mimeType}</small>
-                <small>{frameLabel(asset)}</small>
+                <dl className={styles.assetMetadata}>
+                  {assetMetadataRows(asset).map((row) => (
+                    <div key={row.label}>
+                      <dt>{row.label}</dt>
+                      <dd>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
                 {canSelectAsset(asset) ? (
                   <button type="button" onClick={() => onSelectAsset(asset.id)} disabled={isBusy || asset.isSelected}>
                     {asset.isSelected ? "Selected" : "Select"}
@@ -933,6 +1092,71 @@ function AssetHistory({
         <p className={styles.emptyState}>No generated assets yet.</p>
       )}
     </section>
+  );
+}
+
+function AssetPreview({ asset }: { asset: GeneratedAsset }) {
+  const [hasPreviewError, setHasPreviewError] = useState(false);
+  const imageUrl = asset.previewUrl ?? asset.fileUrl;
+  const videoUrl = asset.previewUrl ?? asset.fileUrl;
+
+  if (asset.assetType === "IMAGE") {
+    return imageUrl && !hasPreviewError ? (
+      <img
+        className={styles.assetPreview}
+        src={imageUrl}
+        alt={`${asset.assetType.toLowerCase()} asset preview`}
+        onError={() => setHasPreviewError(true)}
+      />
+    ) : (
+      <BrokenPreview assetType={asset.assetType} message="Image preview unavailable" />
+    );
+  }
+
+  if (asset.assetType === "VIDEO") {
+    return videoUrl && !hasPreviewError ? (
+      <video
+        className={styles.assetPreview}
+        controls
+        preload="metadata"
+        src={videoUrl}
+        onError={() => setHasPreviewError(true)}
+      />
+    ) : (
+      <BrokenPreview assetType={asset.assetType} message="Video preview unavailable" />
+    );
+  }
+
+  if (asset.assetType === "AUDIO") {
+    return asset.fileUrl && !hasPreviewError ? (
+      <div className={styles.audioPreview}>
+        <span>AUDIO</span>
+        <audio controls preload="metadata" src={asset.fileUrl} onError={() => setHasPreviewError(true)} />
+      </div>
+    ) : (
+      <BrokenPreview assetType={asset.assetType} message="Audio preview unavailable" />
+    );
+  }
+
+  return (
+    <div className={styles.filePreview}>
+      <strong>{asset.assetType}</strong>
+      <span>{asset.fileUrl ? "File asset available" : "No file URL stored"}</span>
+      {asset.fileUrl ? (
+        <a href={asset.fileUrl} target="_blank" rel="noreferrer">
+          Open file
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function BrokenPreview({ assetType, message }: { assetType: GeneratedAsset["assetType"]; message: string }) {
+  return (
+    <div className={styles.assetPlaceholder}>
+      <strong>{assetType}</strong>
+      <span>{message}</span>
+    </div>
   );
 }
 
@@ -973,9 +1197,58 @@ function DebugInspector({ jobs }: { jobs: GenerationJob[] }) {
   );
 }
 
-function frameLabel(asset: GeneratedAsset) {
-  const frameRole = asset.metadata?.frameRole;
-  return typeof frameRole === "string" ? frameRole.replace("_", " ") : "candidate";
+function assetMetadataRows(asset: GeneratedAsset) {
+  const rows: Array<{ label: string; value: string }> = [
+    { label: "MIME", value: asset.mimeType || "unknown" },
+    { label: "Selected", value: asset.isSelected ? "yes" : "no" },
+    { label: "Created", value: formatAssetDate(asset.createdAt) }
+  ];
+  const dimensions = formatDimensions(asset);
+  const duration = formatDuration(asset.durationSeconds);
+  const frameRole = stringMetadata(asset.metadata, "frameRole");
+  const sourceMode = stringMetadata(asset.metadata, "sourceMode");
+  const voiceId = stringMetadata(asset.metadata, "voiceId");
+
+  if (duration) rows.push({ label: "Duration", value: duration });
+  if (dimensions) rows.push({ label: "Dimensions", value: dimensions });
+  if (asset.storagePath) rows.push({ label: "Storage", value: asset.storagePath });
+  if (asset.generationJobId) rows.push({ label: "Job", value: shortId(asset.generationJobId) });
+  if (frameRole) rows.push({ label: "Frame role", value: frameRole.replaceAll("_", " ") });
+  if (sourceMode) rows.push({ label: "Source mode", value: sourceMode.replaceAll("_", " ") });
+  if (voiceId) rows.push({ label: "Voice ID", value: voiceId });
+
+  return rows;
+}
+
+function stringMetadata(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function formatDuration(durationSeconds: number | null) {
+  if (!durationSeconds) {
+    return null;
+  }
+
+  return `${durationSeconds}s`;
+}
+
+function formatDimensions(asset: GeneratedAsset) {
+  return asset.width && asset.height ? `${asset.width}x${asset.height}` : null;
+}
+
+function shortId(id: string) {
+  return id.length > 10 ? `${id.slice(0, 10)}...` : id;
+}
+
+function formatAssetDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
 
 function canSelectAsset(asset: GeneratedAsset) {

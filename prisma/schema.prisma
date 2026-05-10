@@ -7,12 +7,481 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Wave 1 owns the full product schema. This placeholder keeps Prisma wired.
-model AppSetting {
-  id        String   @id @default(cuid())
-  key       String   @unique
-  value     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum ProjectStatus {
+  DRAFT
+  ARCHIVED
 }
 
+enum SourceMaterialType {
+  NOTE
+  SCRIPT
+  NARRATION
+  IMAGE
+  VIDEO
+  LINK
+  FILE
+}
+
+enum PromptLayerType {
+  GLOBAL_PROJECT_INTENT
+  SOURCE_MATERIAL_SUMMARY
+  STORY_CONTEXT
+  STYLE_BIBLE
+  ENTITY_REFERENCES
+  SCENE_CONTEXT
+  PANEL_CONTEXT
+  USER_NOTES
+  MODEL_SPECIFIC_FORMATTING
+}
+
+enum PromptPurpose {
+  IMAGE
+  VIDEO
+  AUDIO
+  TEXT
+  ENTITY_EXTRACTION
+  PANEL_SPLIT
+  ENTITY_MAPPING
+}
+
+enum GenerationJobType {
+  PROMPT
+  IMAGE
+  VIDEO
+  AUDIO
+  ENTITY_EXTRACTION
+  PANEL_SPLIT
+  ENTITY_MAPPING
+  STYLE_BIBLE_DRAFT
+  STORY_ANALYSIS
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  REFERENCE
+  FILE
+}
+
+enum ChatScopeType {
+  PROJECT
+  ENTITY
+  SCENE
+  PANEL
+}
+
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum ExportPackageStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id              String             @id @default(cuid())
+  name            String
+  email           String             @unique
+  avatarUrl       String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  projects        Project[]          @relation("ProjectCreator")
+  sourceMaterials SourceMaterial[]
+  promptLayers    PromptLayer[]
+  generationJobs  GenerationJob[]
+  chatThreads     ChatThread[]
+  appliedMessages ChatMessage[]      @relation("ChatMessageAppliedBy")
+  timelineItems   TimelineManifest[]
+  exportPackages  ExportPackage[]
+}
+
+model Team {
+  id        String          @id @default(cuid())
+  name      String
+  slug      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  projects  Project[]
+  settings  SystemSettings?
+}
+
+model Project {
+  id                       String              @id @default(cuid())
+  teamId                   String
+  title                    String
+  slug                     String
+  description              String?
+  status                   ProjectStatus       @default(DRAFT)
+  aspectRatio              String              @default("9:16")
+  targetDurationMinSeconds Int?
+  targetDurationMaxSeconds Int?
+  createdById              String
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  team                     Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy                User                @relation("ProjectCreator", fields: [createdById], references: [id])
+  sourceMaterials          SourceMaterial[]
+  modelStack               ModelStack?
+  styleBible               StyleBible?
+  entities                 Entity[]
+  scenes                   Scene[]
+  panels                   Panel[]
+  promptLayers             PromptLayer[]
+  promptCompilations       PromptCompilation[]
+  generationJobs           GenerationJob[]
+  generatedAssets          GeneratedAsset[]
+  chatThreads              ChatThread[]
+  timelineManifests        TimelineManifest[]
+  exportPackages           ExportPackage[]
+
+  @@unique([teamId, slug])
+  @@index([status])
+}
+
+model SourceMaterial {
+  id          String             @id @default(cuid())
+  projectId   String
+  type        SourceMaterialType
+  title       String
+  bodyText    String?
+  url         String?
+  fileAssetId String?
+  metadata    Json               @default(dbgenerated("'{}'"))
+  createdById String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileAsset   GeneratedAsset?    @relation("SourceMaterialFileAsset", fields: [fileAssetId], references: [id], onDelete: SetNull)
+  createdBy   User               @relation(fields: [createdById], references: [id])
+
+  @@index([projectId, type])
+}
+
+model ModelStack {
+  id               String   @id @default(cuid())
+  projectId        String   @unique
+  textProvider     String   @default("openai")
+  textModel        String   @default("gpt-4.1")
+  imageProvider    String   @default("openai")
+  imageModel       String   @default("gpt-image-1")
+  videoProvider    String   @default("xai")
+  videoModel       String   @default("grok-imagine")
+  voiceProvider    String   @default("google")
+  voiceModel       String   @default("google-tts")
+  defaultVoiceId   String?
+  providerSettings Json     @default(dbgenerated("'{}'"))
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model StyleBible {
+  id                      String   @id @default(cuid())
+  projectId               String   @unique
+  charactersText          String?
+  placesText              String?
+  objectsText             String?
+  visualStyle             String?
+  colorPalette            String?
+  lightingStyle           String?
+  cameraStyle             String?
+  negativePromptRules     String?
+  globalReferenceAssetIds Json     @default(dbgenerated("'[]'"))
+  notes                   String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  project                 Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Entity {
+  id                       String           @id @default(cuid())
+  projectId                String
+  name                     String
+  type                     String
+  description              String?
+  visualPromptBlock        String?
+  notes                    String?
+  selectedReferenceAssetId String?
+  sourceGenerationJobId    String?
+  metadata                 Json             @default(dbgenerated("'{}'"))
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  project                  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  selectedReferenceAsset   GeneratedAsset?  @relation("EntitySelectedReference", fields: [selectedReferenceAssetId], references: [id], onDelete: SetNull)
+  sourceGenerationJob      GenerationJob?   @relation("EntitySourceGenerationJob", fields: [sourceGenerationJobId], references: [id], onDelete: SetNull)
+  promptLayers             PromptLayer[]
+  generatedAssets          GeneratedAsset[] @relation("GeneratedAssetEntity")
+
+  @@index([projectId, type])
+}
+
+model Scene {
+  id               String        @id @default(cuid())
+  projectId        String
+  orderIndex       Int
+  title            String
+  summary          String?
+  narrativePurpose String?
+  notes            String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  panels           Panel[]
+  promptLayers     PromptLayer[]
+
+  @@unique([projectId, orderIndex])
+  @@index([projectId])
+}
+
+model Panel {
+  id                     String              @id @default(cuid())
+  projectId              String
+  sceneId                String
+  orderIndex             Int
+  title                  String
+  narrativePurpose       String?
+  narrationText          String?
+  visualIntent           String?
+  motionIntent           String?
+  targetDurationSeconds  Int?
+  notes                  String?
+  mappedEntityIds        Json                @default(dbgenerated("'[]'"))
+  panelReferenceAssetIds Json                @default(dbgenerated("'[]'"))
+  firstFrameAssetId      String?
+  lastFrameAssetId       String?
+  selectedImageAssetId   String?
+  selectedVideoAssetId   String?
+  selectedAudioAssetId   String?
+  timelineMetadata       Json                @default(dbgenerated("'{}'"))
+  staleState             Json                @default(dbgenerated("'{}'"))
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  project                Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scene                  Scene               @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  firstFrameAsset        GeneratedAsset?     @relation("PanelFirstFrameAsset", fields: [firstFrameAssetId], references: [id], onDelete: SetNull)
+  lastFrameAsset         GeneratedAsset?     @relation("PanelLastFrameAsset", fields: [lastFrameAssetId], references: [id], onDelete: SetNull)
+  selectedImageAsset     GeneratedAsset?     @relation("PanelSelectedImageAsset", fields: [selectedImageAssetId], references: [id], onDelete: SetNull)
+  selectedVideoAsset     GeneratedAsset?     @relation("PanelSelectedVideoAsset", fields: [selectedVideoAssetId], references: [id], onDelete: SetNull)
+  selectedAudioAsset     GeneratedAsset?     @relation("PanelSelectedAudioAsset", fields: [selectedAudioAssetId], references: [id], onDelete: SetNull)
+  promptLayers           PromptLayer[]
+  promptCompilations     PromptCompilation[]
+  generationJobs         GenerationJob[]
+  generatedAssets        GeneratedAsset[]    @relation("GeneratedAssetPanel")
+
+  @@unique([sceneId, orderIndex])
+  @@index([projectId])
+}
+
+model PromptLayer {
+  id          String          @id @default(cuid())
+  projectId   String
+  panelId     String?
+  entityId    String?
+  sceneId     String?
+  layerType   PromptLayerType
+  title       String
+  content     String
+  isEditable  Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  version     Int             @default(1)
+  createdById String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  panel       Panel?          @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  entity      Entity?         @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  scene       Scene?          @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, layerType])
+  @@index([panelId, sortOrder])
+}
+
+model PromptCompilation {
+  id                        String         @id @default(cuid())
+  projectId                 String
+  panelId                   String?
+  generationJobId           String?        @unique
+  purpose                   PromptPurpose
+  compiledPrompt            String
+  layersSnapshot            Json           @default(dbgenerated("'[]'"))
+  attachedReferenceAssetIds Json           @default(dbgenerated("'[]'"))
+  provider                  String
+  model                     String
+  tokenEstimate             Int?
+  costEstimate              Decimal?
+  createdAt                 DateTime       @default(now())
+  project                   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  panel                     Panel?         @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  generationJob             GenerationJob? @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, purpose])
+}
+
+model GenerationJob {
+  id                        String             @id @default(cuid())
+  projectId                 String
+  panelId                   String?
+  type                      GenerationJobType
+  provider                  String
+  model                     String
+  status                    JobStatus          @default(QUEUED)
+  inputLayers               Json               @default(dbgenerated("'[]'"))
+  attachedReferenceAssetIds Json               @default(dbgenerated("'[]'"))
+  compiledPrompt            String?
+  requestPayload            Json               @default(dbgenerated("'{}'"))
+  responsePayloadSummary    Json               @default(dbgenerated("'{}'"))
+  outputAssetIds            Json               @default(dbgenerated("'[]'"))
+  logs                      Json               @default(dbgenerated("'[]'"))
+  errorPayload              Json?
+  costEstimate              Decimal?
+  tokenUsage                Json?
+  durationMs                Int?
+  retryOfGenerationJobId    String?
+  createdById               String?
+  createdAt                 DateTime           @default(now())
+  startedAt                 DateTime?
+  completedAt               DateTime?
+  project                   Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  panel                     Panel?             @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  createdBy                 User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  retryOfGenerationJob      GenerationJob?     @relation("GenerationJobRetry", fields: [retryOfGenerationJobId], references: [id], onDelete: SetNull)
+  retries                   GenerationJob[]    @relation("GenerationJobRetry")
+  generatedAssets           GeneratedAsset[]
+  sourcedEntities           Entity[]           @relation("EntitySourceGenerationJob")
+  promptCompilation         PromptCompilation?
+  chatMessages              ChatMessage[]
+
+  @@index([projectId, status])
+  @@index([panelId, type])
+}
+
+model GeneratedAsset {
+  id                    String           @id @default(cuid())
+  projectId             String
+  panelId               String?
+  entityId              String?
+  generationJobId       String?
+  assetType             AssetType
+  fileUrl               String
+  previewUrl            String?
+  storagePath           String
+  mimeType              String
+  durationSeconds       Int?
+  width                 Int?
+  height                Int?
+  isSelected            Boolean          @default(false)
+  metadata              Json             @default(dbgenerated("'{}'"))
+  createdAt             DateTime         @default(now())
+  project               Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  panel                 Panel?           @relation("GeneratedAssetPanel", fields: [panelId], references: [id], onDelete: SetNull)
+  entity                Entity?          @relation("GeneratedAssetEntity", fields: [entityId], references: [id], onDelete: SetNull)
+  generationJob         GenerationJob?   @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+  sourceMaterials       SourceMaterial[] @relation("SourceMaterialFileAsset")
+  selectedByEntities    Entity[]         @relation("EntitySelectedReference")
+  panelFirstFrameFor    Panel[]          @relation("PanelFirstFrameAsset")
+  panelLastFrameFor     Panel[]          @relation("PanelLastFrameAsset")
+  panelSelectedImageFor Panel[]          @relation("PanelSelectedImageAsset")
+  panelSelectedVideoFor Panel[]          @relation("PanelSelectedVideoAsset")
+  panelSelectedAudioFor Panel[]          @relation("PanelSelectedAudioAsset")
+
+  @@index([projectId, assetType])
+  @@index([panelId, assetType])
+}
+
+model ChatThread {
+  id          String        @id @default(cuid())
+  projectId   String
+  scopeType   ChatScopeType
+  scopeId     String?
+  title       String?
+  createdById String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User?         @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  messages    ChatMessage[]
+
+  @@index([projectId, scopeType, scopeId])
+}
+
+model ChatMessage {
+  id              String          @id @default(cuid())
+  chatThreadId    String
+  role            ChatMessageRole
+  content         String
+  suggestedPatch  Json?
+  appliedAt       DateTime?
+  appliedById     String?
+  generationJobId String?
+  createdAt       DateTime        @default(now())
+  chatThread      ChatThread      @relation(fields: [chatThreadId], references: [id], onDelete: Cascade)
+  appliedBy       User?           @relation("ChatMessageAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  generationJob   GenerationJob?  @relation(fields: [generationJobId], references: [id], onDelete: SetNull)
+
+  @@index([chatThreadId, createdAt])
+}
+
+model TimelineManifest {
+  id              String         @id @default(cuid())
+  projectId       String
+  exportPackageId String?
+  manifestJson    Json
+  manifestCsv     String?
+  createdById     String?
+  createdAt       DateTime       @default(now())
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  exportPackage   ExportPackage? @relation(fields: [exportPackageId], references: [id], onDelete: SetNull)
+  createdBy       User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+model ExportPackage {
+  id                  String              @id @default(cuid())
+  projectId           String
+  status              ExportPackageStatus @default(QUEUED)
+  zipFileUrl          String?
+  manifestJsonAssetId String?
+  manifestCsvAssetId  String?
+  includedPanelIds    Json                @default(dbgenerated("'[]'"))
+  logs                Json                @default(dbgenerated("'[]'"))
+  errorPayload        Json?
+  createdById         String?
+  createdAt           DateTime            @default(now())
+  completedAt         DateTime?
+  project             Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy           User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  timelineManifests   TimelineManifest[]
+
+  @@index([projectId, status])
+}
+
+model SystemSettings {
+  id                        String   @id @default(cuid())
+  teamId                    String?  @unique
+  promptJobsConcurrency     Int      @default(10)
+  imageJobsConcurrency      Int      @default(5)
+  videoJobsConcurrency      Int      @default(2)
+  audioJobsConcurrency      Int      @default(3)
+  maxBatchSize              Int?
+  providerRateLimitSettings Json     @default(dbgenerated("'{}'"))
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  team                      Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}

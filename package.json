@@ -16,6 +16,9 @@
     "prisma:studio": "prisma studio",
     "worker": "tsx src/server/jobs/worker.ts"
   },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
   "dependencies": {
     "@prisma/client": "^6.0.0",
     "bullmq": "^5.0.0",

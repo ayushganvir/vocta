@@ -55,8 +55,9 @@ Legend:
     - Unsupported controls are shown as warnings rather than silently hidden.
   - Progress:
     - Wave 9 added provider registry routing and real-mode adapter stubs for xAI video and Google TTS.
-    - Default local generation still uses fake adapters unless `VOCTA_PROVIDER_MODE=real`.
-    - Remaining work: verify the exact live API capability matrix and add real OpenAI text/image adapters.
+    - Default local generation still uses fake adapters unless `PROVIDER_MODE=real`.
+    - Wave 10 added OpenAI text/image adapter stubs and a `/configuration` provider capability matrix.
+    - Remaining work: verify the exact live API capability matrix against actual provider responses.
 
 - [ ] [P0] [Architecture] Lock TypeScript-first MVP stack
   - Source: Questionnaire section 21

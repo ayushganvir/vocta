@@ -204,6 +204,7 @@ export interface GeneratedAssetContract {
   assetType: "image" | "video" | "audio" | "reference" | "export";
   fileName: string;
   mimeType: string;
+  bytes?: Uint8Array;
   storagePath?: string;
   previewPath?: string;
   sizeBytes?: number;

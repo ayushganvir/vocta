@@ -1,11 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ModelStackForm } from "./schema";
 
 type ModelStackEditorProps = {
   project: { id: string; title: string } | null;
   initialModelStack: ModelStackForm | null;
+};
+
+type ProviderCapability = {
+  provider: string;
+  kind: string;
+  defaultModel: string;
+  jobTypes: string[];
+  capabilities: string[];
+  realAdapter: boolean;
+  enabledInCurrentMode: boolean;
+  credentialStatus: "configured" | "missing" | "not_required";
+  notes: string[];
+};
+
+type ProviderCapabilitiesResponse = {
+  providerMode: "fake" | "real";
+  capabilities: ProviderCapability[];
 };
 
 const defaultStack = (projectId: string): ModelStackForm => ({
@@ -29,8 +46,13 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
   const [providerSettingsText, setProviderSettingsText] = useState(() =>
     JSON.stringify(initialModelStack?.providerSettings ?? {}, null, 2)
   );
+  const [providerCapabilities, setProviderCapabilities] = useState<ProviderCapabilitiesResponse | null>(null);
   const [message, setMessage] = useState("Project model defaults apply to new generation jobs unless overridden at panel level.");
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    void loadProviderCapabilities();
+  }, []);
 
   if (!project) {
     return (
@@ -82,6 +104,12 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
     setIsSaving(false);
   }
 
+  async function loadProviderCapabilities() {
+    const response = await fetch("/api/providers/capabilities", { cache: "no-store" });
+    const payload = (await response.json()) as ProviderCapabilitiesResponse;
+    setProviderCapabilities(payload);
+  }
+
   return (
     <div className="workspaceGrid">
       <section className="widePanel">
@@ -120,6 +148,34 @@ export function ModelStackEditor({ project, initialModelStack }: ModelStackEdito
           <button className="primaryButton" type="button" onClick={save} disabled={isSaving}>
             {isSaving ? "Saving" : "Save model stack"}
           </button>
+        </div>
+      </section>
+
+      <section className="widePanel providerMatrix">
+        <div className="sectionTitle">
+          <h3>Provider Capability Matrix</h3>
+          <span>{providerCapabilities ? `${providerCapabilities.providerMode} mode` : "loading"}</span>
+        </div>
+        <div className="providerMatrixGrid">
+          {providerCapabilities?.capabilities.map((provider) => (
+            <article key={`${provider.provider}-${provider.kind}`} className="providerCapabilityCard">
+              <div>
+                <strong>{provider.provider}</strong>
+                <span>{provider.kind} / {provider.defaultModel}</span>
+              </div>
+              <dl>
+                <dt>Jobs</dt>
+                <dd>{provider.jobTypes.join(", ")}</dd>
+                <dt>Capabilities</dt>
+                <dd>{provider.capabilities.join(", ")}</dd>
+                <dt>Credentials</dt>
+                <dd>{provider.credentialStatus.replace("_", " ")}</dd>
+                <dt>Runtime</dt>
+                <dd>{provider.enabledInCurrentMode ? "enabled" : "not active in current mode"}</dd>
+              </dl>
+              <p>{provider.notes.join(" ")}</p>
+            </article>
+          )) ?? <p>Loading provider capability matrix...</p>}
         </div>
       </section>
     </div>

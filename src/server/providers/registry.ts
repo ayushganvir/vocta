@@ -2,6 +2,7 @@ import type { JobPayload, JobType } from "../jobs/types";
 import type { ProviderAdapter } from "./types";
 import { createFakeProviderForJob } from "./fake";
 import { createGoogleTtsProvider } from "./google";
+import { createOpenAiImageProvider, createOpenAiTextProvider } from "./openai";
 import { createXaiVideoProvider } from "./xai";
 
 export type ProviderMode = "fake" | "real";
@@ -37,7 +38,7 @@ export function resolveProviderAdapter(input: ResolveProviderAdapterInput): Reso
       configuredModel: input.model,
       runtimeProvider: adapter.provider,
       runtimeModel: adapter.model,
-      fallbackReason: configuredProvider === "fake" ? undefined : "VOCTA_PROVIDER_MODE is not set to real."
+      fallbackReason: configuredProvider === "fake" ? undefined : "PROVIDER_MODE/VOCTA_PROVIDER_MODE is not set to real."
     };
   }
 
@@ -54,10 +55,18 @@ export function resolveProviderAdapter(input: ResolveProviderAdapterInput): Reso
 }
 
 export function providerModeFromEnv(): ProviderMode {
-  return process.env.VOCTA_PROVIDER_MODE === "real" ? "real" : "fake";
+  return process.env.VOCTA_PROVIDER_MODE === "real" || process.env.PROVIDER_MODE === "real" ? "real" : "fake";
 }
 
 function createRealProviderAdapter(jobType: JobType, provider: string, model: string) {
+  if (jobType === "prompt" && provider === "openai") {
+    return createOpenAiTextProvider(model);
+  }
+
+  if (jobType === "image" && provider === "openai") {
+    return createOpenAiImageProvider(model);
+  }
+
   if (jobType === "video" && provider === "xai") {
     return createXaiVideoProvider(model);
   }

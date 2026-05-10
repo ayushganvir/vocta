@@ -74,7 +74,7 @@ export function createXaiVideoProvider(model: string): ProviderAdapter<VideoJobP
     },
     async execute(request) {
       if (!process.env.XAI_API_KEY) {
-        throw new Error("XAI_API_KEY is required when VOCTA_PROVIDER_MODE=real.");
+        throw new Error("XAI_API_KEY is required when PROVIDER_MODE=real.");
       }
 
       const response = await fetch(request.url, {

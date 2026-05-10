@@ -104,7 +104,7 @@ Wave 9 provider routing and debug visibility are integrated:
 9. `/configuration` exposes project-level model stack defaults and provider settings JSON.
 10. Entity records can store speaker/voice metadata and use fake Google voice catalog/preview endpoints.
 11. Panel video/audio settings persist in `timelineMetadata` and flow into queued generation payloads for debug inspection.
-12. Media generation runs through a provider registry. Local/default mode uses fake adapters while preserving configured provider/model metadata; `VOCTA_PROVIDER_MODE=real` routes supported jobs to adapter stubs.
+12. Media generation runs through a provider registry. Local/default mode uses fake adapters while preserving configured provider/model metadata; `PROVIDER_MODE=real` routes supported jobs to adapter stubs.
 13. Real-mode adapter stubs exist for xAI video and Google TTS. They validate/build requests and fail clearly if required keys are missing.
 14. `/jobs` shows resolved media settings above raw payloads for faster inspection.
 
@@ -115,19 +115,30 @@ Real image and text provider adapters are still planned work.
 Default local mode is fake:
 
 ```bash
-VOCTA_PROVIDER_MODE=fake
+PROVIDER_MODE=fake
 ```
 
 Set real mode only when testing live adapters:
 
 ```bash
-VOCTA_PROVIDER_MODE=real
+PROVIDER_MODE=real
 XAI_API_KEY=...
 GOOGLE_TTS_API_KEY=...
 ```
 
 Current real-mode support is intentionally narrow:
 
+- `openai` image jobs map to the OpenAI Images adapter.
+- `openai` prompt jobs map to the OpenAI Responses adapter.
 - `xai` video jobs map to the xAI video adapter.
 - `google` audio jobs map to the Google TTS adapter.
 - Unsupported real routes fail loudly instead of silently falling back.
+
+Use `/configuration` to see the current provider capability matrix. It shows the active provider mode, which providers have real adapters, which credentials are present, and which controls are not fully verified yet.
+
+Live API smoke tests should be explicit and cheap:
+
+- Keep `PROVIDER_MODE=fake` for normal development and automated tests.
+- Use `PROVIDER_MODE=real` only for deliberate live adapter checks.
+- For OpenAI Images, the adapter requests `n=1`, `quality=low`, and one generated image.
+- For OpenAI Responses, the adapter caps prompt compilation at `max_output_tokens=300`.

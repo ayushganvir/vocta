@@ -550,6 +550,65 @@ button,
   overflow-wrap: anywhere;
 }
 
+.providerMatrix {
+  grid-column: 1 / -1;
+}
+
+.providerMatrixGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.providerCapabilityCard {
+  background: #131410;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.providerCapabilityCard > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.providerCapabilityCard > div strong {
+  color: var(--accent);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.providerCapabilityCard > div span,
+.providerCapabilityCard p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.providerCapabilityCard dl {
+  display: grid;
+  gap: 6px 10px;
+  grid-template-columns: 92px minmax(0, 1fr);
+  margin: 0;
+}
+
+.providerCapabilityCard dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.providerCapabilityCard dd {
+  color: #e6dece;
+  font-size: 11px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .debugGrid {
   display: grid;
   gap: 8px;

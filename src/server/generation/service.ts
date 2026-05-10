@@ -666,6 +666,10 @@ function buildPlaceholderBytes<TPayload extends ImageJobPayload | VideoJobPayloa
   payload: TPayload,
   contract: GeneratedAssetContract
 ) {
+  if (contract.bytes) {
+    return contract.bytes;
+  }
+
   const promptPreview = getPayloadText(payload).slice(0, 320).replace(/[<>&]/g, "");
 
   if (contract.mimeType === "image/svg+xml") {

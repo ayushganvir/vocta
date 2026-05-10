@@ -69,7 +69,7 @@ export function createGoogleTtsProvider(model: string): ProviderAdapter<AudioJob
     },
     async execute(request) {
       if (!process.env.GOOGLE_TTS_API_KEY && !process.env.GOOGLE_API_KEY) {
-        throw new Error("GOOGLE_TTS_API_KEY or GOOGLE_API_KEY is required when VOCTA_PROVIDER_MODE=real.");
+        throw new Error("GOOGLE_TTS_API_KEY or GOOGLE_API_KEY is required when PROVIDER_MODE=real.");
       }
 
       const response = await fetch(request.url, {
@@ -114,6 +114,7 @@ export function createGoogleTtsProvider(model: string): ProviderAdapter<AudioJob
             assetType: "audio",
             fileName: `${String(metadata.generationJobId ?? "google-tts")}.${format}`,
             mimeType: format === "mp3" ? "audio/mpeg" : "audio/wav",
+            bytes: response.audioContent ? Uint8Array.from(Buffer.from(response.audioContent, "base64")) : undefined,
             metadata: {
               transcript: narration,
               durationSeconds: Math.max(2, Math.ceil(narration.length / 18)),

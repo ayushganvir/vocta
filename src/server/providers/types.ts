@@ -4,7 +4,9 @@ export type ProviderKind = "text" | "image" | "video" | "audio";
 
 export type ProviderCapability =
   | "text-json"
+  | "text-responses"
   | "image-9-16"
+  | "image-generation"
   | "image-references"
   | "video-prompt-only"
   | "video-image-to-video"

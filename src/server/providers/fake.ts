@@ -1,6 +1,7 @@
 import { redactPayload } from "./redaction";
 import type { JobPayload, JobResult, JobType } from "../jobs/types";
 import type { ProviderAdapter, ProviderBuiltRequest, ProviderCapability, ProviderKind } from "./types";
+export { runProvider } from "./run";
 
 interface FakeRawResponse {
   ok: true;
@@ -438,21 +439,4 @@ export function createFakeProviderForJob(jobType: JobType) {
   }
 
   throw new Error(`No fake provider registered for job type: ${jobType}`);
-}
-
-export async function runProvider<
-  TInput extends JobPayload,
-  TBuiltRequest extends ProviderBuiltRequest,
-  TRawResponse,
-  TResult extends JobResult
->(adapter: ProviderAdapter<TInput, TBuiltRequest, TRawResponse, TResult>, input: TInput): Promise<TResult> {
-  const validation = adapter.validateInput(input);
-
-  if (!validation.valid) {
-    throw new Error(validation.errors.join(" "));
-  }
-
-  const request = adapter.buildRequest(input);
-  const response = await adapter.execute(request);
-  return adapter.parseResponse(response, request);
 }

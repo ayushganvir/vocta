@@ -7,7 +7,7 @@ Vocta MVP uses a TypeScript-first foundation:
 - SQLite for local prototype data
 - BullMQ + Redis for async jobs
 - Local storage abstraction first, Cloudflare R2 later
-- Fake providers before real provider integrations
+- Fake providers by default, with provider adapter stubs for real integrations
 
 ## Local Commands
 
@@ -91,7 +91,7 @@ At this scaffold stage, `lint` delegates to `typecheck` to keep the command non-
 
 ## Current Scope
 
-Wave 8 model, voice, and generation settings are integrated:
+Wave 9 provider routing and debug visibility are integrated:
 
 1. Project, source material, Style Bible, entities, scenes, panels, and prompt compilation are backed by Prisma APIs.
 2. AI drafting exists for story analysis, entity extraction/mapping, Style Bible drafts, and panel prompt enhancement; drafts require explicit apply/save actions.
@@ -104,5 +104,30 @@ Wave 8 model, voice, and generation settings are integrated:
 9. `/configuration` exposes project-level model stack defaults and provider settings JSON.
 10. Entity records can store speaker/voice metadata and use fake Google voice catalog/preview endpoints.
 11. Panel video/audio settings persist in `timelineMetadata` and flow into queued generation payloads for debug inspection.
+12. Media generation runs through a provider registry. Local/default mode uses fake adapters while preserving configured provider/model metadata; `VOCTA_PROVIDER_MODE=real` routes supported jobs to adapter stubs.
+13. Real-mode adapter stubs exist for xAI video and Google TTS. They validate/build requests and fail clearly if required keys are missing.
+14. `/jobs` shows resolved media settings above raw payloads for faster inspection.
 
-Real provider adapters are still planned work.
+Real image and text provider adapters are still planned work.
+
+## Provider Mode
+
+Default local mode is fake:
+
+```bash
+VOCTA_PROVIDER_MODE=fake
+```
+
+Set real mode only when testing live adapters:
+
+```bash
+VOCTA_PROVIDER_MODE=real
+XAI_API_KEY=...
+GOOGLE_TTS_API_KEY=...
+```
+
+Current real-mode support is intentionally narrow:
+
+- `xai` video jobs map to the xAI video adapter.
+- `google` audio jobs map to the Google TTS adapter.
+- Unsupported real routes fail loudly instead of silently falling back.

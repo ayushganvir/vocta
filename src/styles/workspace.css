@@ -508,6 +508,48 @@ button,
   padding: 10px;
 }
 
+.resolvedSettings {
+  background: #131410;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin-top: 10px;
+  padding: 10px;
+}
+
+.resolvedSettings .sectionTitle {
+  margin-bottom: 8px;
+}
+
+.resolvedSettingsGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resolvedSettingsGrid div {
+  background: #10110f;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.resolvedSettingsGrid span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.resolvedSettingsGrid strong {
+  color: #e6dece;
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .debugGrid {
   display: grid;
   gap: 8px;

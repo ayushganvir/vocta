@@ -16,7 +16,8 @@ import type {
   VideoJobPayload,
 } from "@/server/jobs/types";
 import { compilePanelPrompt, storePromptCompilation } from "@/server/prompting/service";
-import { createFakeProviderForJob, runProvider } from "@/server/providers/fake";
+import { resolveProviderAdapter } from "@/server/providers/registry";
+import { runProvider } from "@/server/providers/run";
 import { LocalStorageDriver } from "@/server/storage/local";
 import type { StorageDriver } from "@/server/storage/types";
 
@@ -384,7 +385,7 @@ export async function executeQueuedGenerationJob(
 
   const existingJob = await db.generationJob.findUniqueOrThrow({
     where: { id: payload.generationJobId },
-    select: { status: true }
+    select: { status: true, provider: true, model: true }
   });
 
   if (existingJob.status === JobStatus.CANCELLED) {
@@ -423,18 +424,38 @@ async function runMediaJob<TPayload extends ImageJobPayload | VideoJobPayload | 
   const startedAt = options.now?.() ?? new Date();
   const storage = options.storage ?? new LocalStorageDriver();
 
+  const jobProvider = await db.generationJob.findUniqueOrThrow({
+    where: { id: generationJobId },
+    select: { provider: true, model: true }
+  });
+  const providerRuntime = resolveProviderAdapter({
+    jobType: payload.jobType,
+    provider: jobProvider.provider,
+    model: jobProvider.model
+  });
+  const runtimePayload = withProviderRuntimeMetadata(payload, providerRuntime);
+  const startedLogs = [
+    { at: startedAt.toISOString(), message: "Manual generation started." },
+    {
+      at: startedAt.toISOString(),
+      message: `Provider adapter selected: ${providerRuntime.runtimeProvider}/${providerRuntime.runtimeModel} (${providerRuntime.mode} mode).`
+    },
+    providerRuntime.fallbackReason
+      ? { at: startedAt.toISOString(), message: `Provider fallback: ${providerRuntime.fallbackReason}` }
+      : null
+  ].filter((entry): entry is { at: string; message: string } => Boolean(entry));
+
   await updateGenerationJobStatus(db, generationJobId, JobStatus.RUNNING, {
-    requestPayload: payload as unknown as Prisma.InputJsonValue,
-    logs: [{ at: startedAt.toISOString(), message: "Manual generation started." }]
+    requestPayload: runtimePayload as unknown as Prisma.InputJsonValue,
+    logs: startedLogs
   });
 
   try {
-    const provider = createFakeProviderForJob(payload.jobType);
-    const result = await runProvider(provider, payload);
+    const result = await runProvider(providerRuntime.adapter, runtimePayload);
     const assetIds: string[] = [];
 
     for (const contract of "assets" in result ? result.assets : []) {
-      const asset = await persistGeneratedAsset(db, storage, payload, generationJobId, contract);
+      const asset = await persistGeneratedAsset(db, storage, runtimePayload, generationJobId, contract);
       assetIds.push(asset.id);
       await options.onAssetCreated(asset.id);
     }
@@ -446,7 +467,7 @@ async function runMediaJob<TPayload extends ImageJobPayload | VideoJobPayload | 
       durationMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
       costEstimate: result.costEstimate ? new Prisma.Decimal(result.costEstimate.amount) : undefined,
       logs: [
-        { at: startedAt.toISOString(), message: "Manual generation started." },
+        ...startedLogs,
         { at: completedAt.toISOString(), message: `Generated ${assetIds.length} asset(s).` }
       ]
     });
@@ -458,7 +479,7 @@ async function runMediaJob<TPayload extends ImageJobPayload | VideoJobPayload | 
       durationMs: Math.max(0, failedAt.getTime() - startedAt.getTime()),
       errorPayload: serializeError(error) as Prisma.InputJsonValue,
       logs: [
-        { at: startedAt.toISOString(), message: "Manual generation started." },
+        ...startedLogs,
         { at: failedAt.toISOString(), message: "Generation failed." }
       ]
     });
@@ -660,6 +681,35 @@ function buildPlaceholderBytes<TPayload extends ImageJobPayload | VideoJobPayloa
 function getPayloadText(payload: ImageJobPayload | VideoJobPayload | AudioJobPayload) {
   if (payload.jobType === "audio") return payload.narration;
   return payload.prompt;
+}
+
+function withProviderRuntimeMetadata<TPayload extends ImageJobPayload | VideoJobPayload | AudioJobPayload>(
+  payload: TPayload,
+  providerRuntime: {
+    mode: string;
+    configuredProvider: string;
+    configuredModel: string;
+    runtimeProvider: string;
+    runtimeModel: string;
+    fallbackReason?: string;
+  }
+): TPayload {
+  const providerRuntimeSnapshot = {
+    mode: providerRuntime.mode,
+    configuredProvider: providerRuntime.configuredProvider,
+    configuredModel: providerRuntime.configuredModel,
+    runtimeProvider: providerRuntime.runtimeProvider,
+    runtimeModel: providerRuntime.runtimeModel,
+    fallbackReason: providerRuntime.fallbackReason
+  };
+
+  return {
+    ...payload,
+    metadata: {
+      ...payload.metadata,
+      providerRuntime: providerRuntimeSnapshot
+    }
+  };
 }
 
 function assetTypeFromContract(contract: GeneratedAssetContract) {

@@ -305,6 +305,7 @@ export function JobsWorkspace() {
                 Refresh detail
               </button>
             </div>
+            <ResolvedSettingsPanel job={selectedJob} />
 
             <div className="debugGrid">
               <DebugBlock title="Compiled prompt" value={selectedJob.compiledPrompt ?? ""} />
@@ -325,6 +326,31 @@ export function JobsWorkspace() {
         )}
       </section>
     </div>
+  );
+}
+
+function ResolvedSettingsPanel({ job }: { job: JobDetail }) {
+  const settings = extractResolvedSettings(job);
+
+  if (!settings.length) {
+    return null;
+  }
+
+  return (
+    <section className="resolvedSettings" aria-label="Resolved generation settings">
+      <div className="sectionTitle">
+        <h3>Resolved Settings</h3>
+        <span>{job.provider} / {job.model}</span>
+      </div>
+      <div className="resolvedSettingsGrid">
+        {settings.map((setting) => (
+          <div key={setting.label}>
+            <span>{setting.label}</span>
+            <strong>{formatDebugValue(setting.value)}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -352,4 +378,77 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function extractResolvedSettings(job: JobDetail) {
+  const request = objectValue(job.requestPayload);
+  const providerRuntime = objectValue(request.metadata)?.providerRuntime;
+  const responseAssetMetadata = firstResponseAssetMetadata(job.responsePayloadSummary);
+  const settings: Array<{ label: string; value: unknown }> = [];
+
+  if (providerRuntime) {
+    settings.push({ label: "Runtime provider", value: providerRuntime });
+  }
+
+  if (job.type === "VIDEO") {
+    settings.push(
+      { label: "Duration", value: request.durationSeconds ?? responseAssetMetadata.durationSeconds },
+      { label: "Aspect ratio", value: request.aspectRatio ?? responseAssetMetadata.aspectRatio },
+      { label: "Resolution", value: request.resolution ?? responseAssetMetadata.resolution },
+      { label: "Source mode", value: request.sourceMode ?? responseAssetMetadata.sourceMode },
+      { label: "Source image IDs", value: request.sourceImageAssetIds ?? responseAssetMetadata.sourceImageAssetIds }
+    );
+  }
+
+  if (job.type === "AUDIO") {
+    settings.push(
+      { label: "Speaker entity", value: request.speakerEntityId },
+      { label: "Voice ID", value: request.voiceId ?? responseAssetMetadata.voiceId },
+      { label: "Voice label", value: request.voiceLabel ?? responseAssetMetadata.voiceLabel },
+      { label: "Voice notes", value: request.voiceNotes ?? responseAssetMetadata.voiceNotes },
+      { label: "Pace", value: request.pace ?? responseAssetMetadata.pace },
+      { label: "Emotion", value: request.emotion ?? responseAssetMetadata.emotion },
+      { label: "Speaking rate", value: request.speakingRate ?? responseAssetMetadata.speakingRate },
+      { label: "Pitch", value: request.pitch ?? responseAssetMetadata.pitch },
+      { label: "Format", value: request.format }
+    );
+  }
+
+  if (job.type === "IMAGE") {
+    settings.push(
+      { label: "Frame role", value: request.frameRole ?? responseAssetMetadata.frameRole },
+      { label: "Aspect ratio", value: request.aspectRatio ?? responseAssetMetadata.aspectRatio },
+      { label: "Negative prompt", value: request.negativePrompt },
+      { label: "Reference count", value: Array.isArray(request.references) ? request.references.length : 0 }
+    );
+  }
+
+  return settings.filter((setting) => setting.value !== undefined && setting.value !== null && setting.value !== "");
+}
+
+function firstResponseAssetMetadata(value: unknown) {
+  const response = objectValue(value);
+  const assets = Array.isArray(response.assets) ? response.assets : [];
+  const firstAsset = objectValue(assets[0]);
+  return objectValue(firstAsset.metadata);
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function formatDebugValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length ? value.join(", ") : "none";
+  }
+
+  if (value && typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return "not set";
+  }
+
+  return String(value);
 }

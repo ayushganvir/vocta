@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createFakeImageProvider,
   createFakeProviderForJob,
+  createFakeVideoProvider,
   createFakeTextProvider,
   runProvider
 } from "./fake";
@@ -46,6 +47,34 @@ describe("fake providers", () => {
     }
     expect(response.suggestedEntities.length).toBeGreaterThan(0);
     expect(response.suggestedPanels[0]?.visualIntent).toContain("vertical");
+  });
+
+  it("echoes video generation settings into fake asset metadata", async () => {
+    const provider = createFakeVideoProvider();
+    const response = await runProvider(provider, {
+      jobType: "video",
+      projectId: "project_1",
+      requestedAt: "2026-05-10T00:00:00.000Z",
+      panelId: "panel_1",
+      prompt: "Generate a vertical clip",
+      aspectRatio: "2:3",
+      resolution: "1080p",
+      sourceMode: "first_last_frame",
+      sourceImageAssetIds: ["first", "last"],
+      durationSeconds: 8
+    });
+
+    expect(response.jobType).toBe("video");
+    if (response.jobType !== "video") {
+      throw new Error("Expected video response");
+    }
+    expect(response.assets[0]?.metadata).toMatchObject({
+      durationSeconds: 8,
+      aspectRatio: "2:3",
+      resolution: "1080p",
+      sourceMode: "first_last_frame",
+      sourceImageAssetIds: ["first", "last"]
+    });
   });
 
   it("routes job types to matching fake provider kinds", () => {

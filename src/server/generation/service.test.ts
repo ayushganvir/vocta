@@ -157,6 +157,15 @@ describe("generation service", () => {
     expect(jobs.every((job) => Boolean(job.compiledPrompt))).toBe(true);
     expect(jobs.every((job) => Array.isArray(job.inputLayers))).toBe(true);
     expect(jobs.every((job) => Array.isArray(job.outputAssetIds))).toBe(true);
+    expect(jobs[3]?.requestPayload).toMatchObject({
+      metadata: {
+        providerRuntime: {
+          configuredProvider: "xai",
+          runtimeProvider: "fake",
+          mode: "fake"
+        }
+      }
+    });
   });
 
   it("queues image generation first and executes the stored payload later", async () => {

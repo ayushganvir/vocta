@@ -59,6 +59,37 @@ Run workers:
 npm run worker
 ```
 
+Run the hot-reload worker during development:
+
+```bash
+npm run worker:dev
+```
+
+Open all always-on local services in one iTerm2 tab:
+
+```bash
+npm run dev:iterm
+```
+
+This creates one iTerm2 tab with split panes for:
+
+- `Web`: `PORT=3000 npm run dev`, the Next.js app and API routes with hot reload.
+- `Worker`: `npm run worker:dev`, the BullMQ worker restarted by `tsx watch` when worker/server code changes.
+- `Redis`: `redis-server`, or a hold-open status pane if Redis is already running.
+- `Vitest Watch`: `npm run test:watch`, focused feedback while editing.
+
+Optional Prisma Studio can be included with:
+
+```bash
+VOCTA_DEV_STUDIO=1 npm run dev:iterm
+```
+
+To use a different app port:
+
+```bash
+PORT=3008 npm run dev:iterm
+```
+
 Queue-backed generation and export now use Prisma as the source of truth and BullMQ/Redis for execution. The normal local workflow is:
 
 1. Start Redis.

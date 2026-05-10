@@ -217,7 +217,9 @@ export interface ImageJobResult extends BaseJobResult<"image"> {
 export interface VideoJobPayload extends BaseJobPayload<"video"> {
   panelId: string;
   prompt: string;
-  aspectRatio: "9:16" | "16:9" | "1:1";
+  aspectRatio: "9:16" | "16:9" | "1:1" | "4:3" | "3:4" | "3:2" | "2:3";
+  resolution?: "480p" | "720p" | "1080p";
+  sourceMode?: "text_to_video" | "image_to_video" | "first_last_frame";
   sourceImageAssetIds?: string[];
   durationSeconds?: number;
   references?: JobReference[];
@@ -231,9 +233,14 @@ export interface VideoJobResult extends BaseJobResult<"video"> {
 export interface AudioJobPayload extends BaseJobPayload<"audio"> {
   panelId: string;
   narration: string;
+  speakerEntityId?: string;
   voiceId?: string;
+  voiceLabel?: string;
+  voiceNotes?: string;
   pace?: "slow" | "normal" | "fast";
   emotion?: string;
+  speakingRate?: number;
+  pitch?: number;
   format: "wav" | "mp3";
 }
 

@@ -348,7 +348,7 @@ Legend:
 
 - [ ] [P0] [Backend] Implement video generation
   - Source: Questionnaire section 12
-  - Progress: Wave 4 added manual fake-provider video generation API using compiled panel prompts plus selected image/frame references. Keep open for real provider capability handling and duration estimation.
+  - Progress: Wave 8 adds panel-level video settings for duration, aspect ratio, resolution, and source mode; queued video job payloads now persist these resolved options for debug inspection. Keep open for real provider capability handling.
   - Acceptance:
     - Video generation can run without mandatory video input if provider supports prompt-only.
     - Uses selected image/first-last/motion prompt/entity references when available and supported.
@@ -368,6 +368,7 @@ Legend:
 
 - [ ] [P0] [Database] Add speaker/voice metadata
   - Source: Questionnaire section 13
+  - Progress: Wave 8 stores voice settings in `Entity.metadata` without schema churn: voice ID, label, notes, default emotion, speaking rate, pitch, sample text, and speaker-only state.
   - Acceptance:
     - Project can have narrator/speaker entries.
     - Character entities can be associated with voice settings.
@@ -375,6 +376,7 @@ Legend:
 
 - [ ] [P0] [Frontend] Build voice selection and preview UI
   - Source: Questionnaire section 13
+  - Progress: Wave 8 adds entity voice fields, fake Google voice catalog/preview endpoints, and panel audio settings for speaker/entity inheritance plus manual overrides.
   - Acceptance:
     - User can choose project-level voice defaults.
     - Multiple speakers can be previewed.
@@ -382,7 +384,7 @@ Legend:
 
 - [ ] [P0] [Backend] Implement audio generation
   - Source: Questionnaire section 13
-  - Progress: Wave 4 added manual fake-provider audio generation API with pace, emotion, WAV/MP3, duration metadata, and selected-audio update. Keep open for the real Google Voice/TTS adapter.
+  - Progress: Wave 8 adds resolved audio payload fields for speaker entity, voice ID/label/notes, emotion, pace, speaking rate, pitch, and format; fake assets echo this metadata. Keep open for the real Google Voice/TTS adapter.
   - Acceptance:
     - Uses Google Voice/TTS provider adapter.
     - Supports pace as slow/normal/fast plus tone/emotion free text.
@@ -437,7 +439,7 @@ Legend:
 
 - [x] [P0] [Backend] Implement stale warning rules
   - Source: Questionnaire section 18
-  - Implemented: Wave 6 adds a shared stale service and wires source material, Style Bible, mapped entity edits/deletes, panel text/prompt/reference/mapping edits, and panel reorder to stale warnings.
+  - Implemented: Wave 6 adds a shared stale service and wires source material, Style Bible, mapped entity edits/deletes, panel text/prompt/reference/mapping edits, panel audio/video generation setting edits, and panel reorder to stale warnings.
   - Acceptance:
     - Stale warnings are created when entity description/reference, Style Bible, narration, visual/motion intent, prompt layer, references, panel order/split/merge, or source material changes.
     - Model Stack changes can be added later unless selected.

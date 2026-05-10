@@ -2,6 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import styles from "./scenes-workspace.module.css";
+import {
+  audioFormats,
+  audioPaces,
+  generationAspectRatios,
+  videoResolutions,
+  videoSourceModes,
+  type AudioSettings,
+  type VideoSettings
+} from "@/features/generation/settings";
 
 type PromptFields = {
   referenceNotes?: string | null;
@@ -31,10 +40,28 @@ type Panel = {
   selectedVideoAssetId: string | null;
   selectedAudioAssetId: string | null;
   promptFields: PromptFields;
+  audioSettings: AudioSettings;
+  videoSettings: VideoSettings;
   staleState: Record<string, unknown>;
   generatedAssets: GeneratedAsset[];
   generationJobs: GenerationJob[];
   updatedAt: string;
+};
+
+type EntityOption = {
+  id: string;
+  name: string;
+  type: string;
+  metadata: {
+    speakerOnly: boolean;
+    voiceId: string;
+    voiceLabel: string;
+    voiceNotes: string;
+    defaultEmotion: string;
+    speakingRate: number | "";
+    pitch: number | "";
+    sampleText: string;
+  };
 };
 
 type GeneratedAsset = {
@@ -77,6 +104,25 @@ type Scene = {
   narrativePurpose: string | null;
   notes: string | null;
   panels: Panel[];
+};
+
+type AudioOptions = {
+  speakerEntityId: string;
+  voiceId: string;
+  voiceLabel: string;
+  voiceNotes: string;
+  pace: AudioSettings["pace"];
+  emotion: string;
+  speakingRate: string;
+  pitch: string;
+  format: AudioSettings["format"];
+};
+
+type VideoOptions = {
+  durationSeconds: string;
+  aspectRatio: VideoSettings["aspectRatio"];
+  resolution: VideoSettings["resolution"];
+  sourceMode: VideoSettings["sourceMode"];
 };
 
 type ScenesResponse = {
@@ -126,18 +172,36 @@ export function ScenesWorkspace() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [promptDraft, setPromptDraft] = useState<Partial<Draft> | null>(null);
   const [promptDraftRationale, setPromptDraftRationale] = useState<string[]>([]);
-  const [audioOptions, setAudioOptions] = useState({
+  const [audioOptions, setAudioOptions] = useState<AudioOptions>({
+    speakerEntityId: "",
     voiceId: "",
+    voiceLabel: "",
+    voiceNotes: "",
     pace: "normal",
     emotion: "",
+    speakingRate: "",
+    pitch: "",
     format: "wav"
   });
+  const [videoOptions, setVideoOptions] = useState<VideoOptions>({
+    durationSeconds: "",
+    aspectRatio: "9:16",
+    resolution: "720p",
+    sourceMode: "text_to_video"
+  });
+  const [entities, setEntities] = useState<EntityOption[]>([]);
   const [status, setStatus] = useState("Loading scenes...");
   const [isBusy, setIsBusy] = useState(false);
 
   useEffect(() => {
     void loadScenes();
   }, []);
+
+  useEffect(() => {
+    if (projectId) {
+      void loadEntities(projectId);
+    }
+  }, [projectId]);
 
   const selectedScene = useMemo(
     () => scenes.find((scene) => scene.id === selectedSceneId) ?? scenes[0] ?? null,
@@ -154,10 +218,16 @@ export function ScenesWorkspace() {
     draft.imagePrompt.trim() || draft.videoPrompt.trim() || draft.audioPrompt.trim()
   );
   const orderLabel = selectedPanel ? `${selectedScene?.orderIndex ?? 0}.${selectedPanel.orderIndex}` : "-";
+  const mappedVoiceEntities = useMemo(() => {
+    const mapped = new Set(selectedPanel?.mappedEntityIds ?? []);
+    return entities.filter((entity) => mapped.has(entity.id) && (entity.metadata.speakerOnly || entity.type === "character" || entity.type === "speaker"));
+  }, [entities, selectedPanel?.mappedEntityIds]);
 
   useEffect(() => {
     if (selectedPanel) {
       setDraft(panelToDraft(selectedPanel));
+      setAudioOptions(audioSettingsToOptions(selectedPanel.audioSettings));
+      setVideoOptions(videoSettingsToOptions(selectedPanel.videoSettings, selectedPanel.targetDurationSeconds));
       setSelectedPanelId(selectedPanel.id);
     } else {
       setDraft(emptyDraft);
@@ -174,6 +244,12 @@ export function ScenesWorkspace() {
     setSelectedSceneId((current) => current ?? data.scenes[0]?.id ?? null);
     setSelectedPanelId((current) => current ?? data.scenes[0]?.panels[0]?.id ?? null);
     setStatus(data.scenes.length ? "Scenes loaded." : "Create the first required scene.");
+  }
+
+  async function loadEntities(nextProjectId: string) {
+    const response = await fetch(`/api/entities?projectId=${nextProjectId}`, { cache: "no-store" });
+    const data = (await response.json()) as { entities?: EntityOption[] };
+    setEntities(data.entities ?? []);
   }
 
   async function createScene() {
@@ -248,7 +324,7 @@ export function ScenesWorkspace() {
     const response = await fetch(`/api/panels/${selectedPanel.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(draftToPayload(draft))
+      body: JSON.stringify(draftToPayload(draft, audioOptions, videoOptions))
     });
     const data = (await response.json()) as { panel?: Panel; error?: string };
 
@@ -392,7 +468,10 @@ export function ScenesWorkspace() {
 
     await runGeneration("/api/generation/video", {
       panelId: selectedPanel.id,
-      durationSeconds: selectedPanel.targetDurationSeconds
+      durationSeconds: toNullableInt(videoOptions.durationSeconds),
+      aspectRatio: videoOptions.aspectRatio,
+      resolution: videoOptions.resolution,
+      sourceMode: videoOptions.sourceMode
     }, "Video generated and selected.");
   }
 
@@ -403,11 +482,30 @@ export function ScenesWorkspace() {
 
     await runGeneration("/api/generation/audio", {
       panelId: selectedPanel.id,
+      speakerEntityId: audioOptions.speakerEntityId || null,
       voiceId: audioOptions.voiceId || null,
+      voiceLabel: audioOptions.voiceLabel || null,
+      voiceNotes: audioOptions.voiceNotes || null,
       pace: audioOptions.pace,
       emotion: audioOptions.emotion || null,
+      speakingRate: toNullableFloat(audioOptions.speakingRate),
+      pitch: toNullableFloat(audioOptions.pitch),
       format: audioOptions.format
     }, "Voiceover generated and selected.");
+  }
+
+  function selectSpeakerEntity(entityId: string) {
+    const entity = entities.find((item) => item.id === entityId);
+    setAudioOptions((current) => ({
+      ...current,
+      speakerEntityId: entityId,
+      voiceId: entity?.metadata.voiceId || current.voiceId,
+      voiceLabel: entity?.metadata.voiceLabel || current.voiceLabel,
+      voiceNotes: entity?.metadata.voiceNotes || current.voiceNotes,
+      emotion: entity?.metadata.defaultEmotion || current.emotion,
+      speakingRate: entity?.metadata.speakingRate === "" ? current.speakingRate : String(entity?.metadata.speakingRate ?? current.speakingRate),
+      pitch: entity?.metadata.pitch === "" ? current.pitch : String(entity?.metadata.pitch ?? current.pitch)
+    }));
   }
 
   async function runGeneration(endpoint: string, payload: Record<string, unknown>, successMessage: string) {
@@ -627,6 +725,82 @@ export function ScenesWorkspace() {
           <Area label="Negative prompt" value={draft.negativePrompt} onChange={(value) => setDraftField("negativePrompt", value)} />
         </div>
 
+        <div className={styles.settingsGrid}>
+          <section className={styles.settingsPanel}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p>Video generation settings</p>
+                <h4>Resolved per panel</h4>
+              </div>
+            </div>
+            <Field label="Duration seconds" value={videoOptions.durationSeconds} onChange={(durationSeconds) => setVideoOptions((current) => ({ ...current, durationSeconds }))} />
+            <label className={styles.field}>
+              <span>Aspect ratio</span>
+              <select value={videoOptions.aspectRatio} onChange={(event) => setVideoOptions((current) => ({ ...current, aspectRatio: event.target.value as VideoOptions["aspectRatio"] }))}>
+                {generationAspectRatios.map((ratio) => (
+                  <option key={ratio} value={ratio}>{ratio}</option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Resolution</span>
+              <select value={videoOptions.resolution} onChange={(event) => setVideoOptions((current) => ({ ...current, resolution: event.target.value as VideoOptions["resolution"] }))}>
+                {videoResolutions.map((resolution) => (
+                  <option key={resolution} value={resolution}>{resolution}</option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Source mode</span>
+              <select value={videoOptions.sourceMode} onChange={(event) => setVideoOptions((current) => ({ ...current, sourceMode: event.target.value as VideoOptions["sourceMode"] }))}>
+                {videoSourceModes.map((mode) => (
+                  <option key={mode} value={mode}>{mode.replaceAll("_", " ")}</option>
+                ))}
+              </select>
+            </label>
+          </section>
+
+          <section className={styles.settingsPanel}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <p>Audio generation settings</p>
+                <h4>Entity inheritance + overrides</h4>
+              </div>
+            </div>
+            <label className={styles.field}>
+              <span>Speaker/entity</span>
+              <select value={audioOptions.speakerEntityId} onChange={(event) => selectSpeakerEntity(event.target.value)}>
+                <option value="">Project/default voice</option>
+                {mappedVoiceEntities.map((entity) => (
+                  <option key={entity.id} value={entity.id}>{entity.name}</option>
+                ))}
+              </select>
+            </label>
+            <Field label="Voice ID override" value={audioOptions.voiceId} onChange={(voiceId) => setAudioOptions((current) => ({ ...current, voiceId }))} />
+            <Field label="Voice label" value={audioOptions.voiceLabel} onChange={(voiceLabel) => setAudioOptions((current) => ({ ...current, voiceLabel }))} />
+            <Field label="Emotion/style" value={audioOptions.emotion} onChange={(emotion) => setAudioOptions((current) => ({ ...current, emotion }))} />
+            <Field label="Speaking rate" value={audioOptions.speakingRate} onChange={(speakingRate) => setAudioOptions((current) => ({ ...current, speakingRate }))} />
+            <Field label="Pitch" value={audioOptions.pitch} onChange={(pitch) => setAudioOptions((current) => ({ ...current, pitch }))} />
+            <label className={styles.field}>
+              <span>Pace</span>
+              <select value={audioOptions.pace} onChange={(event) => setAudioOptions((current) => ({ ...current, pace: event.target.value as AudioOptions["pace"] }))}>
+                {audioPaces.map((pace) => (
+                  <option key={pace} value={pace}>{pace}</option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span>Format</span>
+              <select value={audioOptions.format} onChange={(event) => setAudioOptions((current) => ({ ...current, format: event.target.value as AudioOptions["format"] }))}>
+                {audioFormats.map((format) => (
+                  <option key={format} value={format}>{format}</option>
+                ))}
+              </select>
+            </label>
+            <Area label="Voice notes" value={audioOptions.voiceNotes} onChange={(voiceNotes) => setAudioOptions((current) => ({ ...current, voiceNotes }))} />
+          </section>
+        </div>
+
         <div className={styles.manualActions}>
           <button type="button" onClick={() => generateImage("image")} disabled={isBusy || !selectedPanel || !hasPrompt}>
             Generate image
@@ -644,26 +818,6 @@ export function ScenesWorkspace() {
             Generate voice
           </button>
           <span>{status}</span>
-        </div>
-
-        <div className={styles.voiceControls}>
-          <Field label="Voice ID" value={audioOptions.voiceId} onChange={(voiceId) => setAudioOptions((current) => ({ ...current, voiceId }))} />
-          <label className={styles.field}>
-            <span>Pace</span>
-            <select value={audioOptions.pace} onChange={(event) => setAudioOptions((current) => ({ ...current, pace: event.target.value }))}>
-              <option value="slow">slow</option>
-              <option value="normal">normal</option>
-              <option value="fast">fast</option>
-            </select>
-          </label>
-          <Field label="Emotion" value={audioOptions.emotion} onChange={(emotion) => setAudioOptions((current) => ({ ...current, emotion }))} />
-          <label className={styles.field}>
-            <span>Format</span>
-            <select value={audioOptions.format} onChange={(event) => setAudioOptions((current) => ({ ...current, format: event.target.value }))}>
-              <option value="wav">wav</option>
-              <option value="mp3">mp3</option>
-            </select>
-          </label>
         </div>
 
         {selectedPanel ? (
@@ -871,7 +1025,11 @@ function panelToDraft(panel: Panel): Draft {
   };
 }
 
-function draftToPayload(draft: Draft) {
+function draftToPayload(
+  draft: Draft,
+  audioOptions?: ReturnType<typeof audioSettingsToOptions>,
+  videoOptions?: ReturnType<typeof videoSettingsToOptions>
+) {
   const duration = Number.parseInt(draft.targetDurationSeconds, 10);
 
   return {
@@ -890,7 +1048,28 @@ function draftToPayload(draft: Draft) {
       videoPrompt: draft.videoPrompt,
       audioPrompt: draft.audioPrompt,
       negativePrompt: draft.negativePrompt
-    }
+    },
+    audioSettings: audioOptions
+      ? {
+          speakerEntityId: audioOptions.speakerEntityId || null,
+          voiceId: audioOptions.voiceId || null,
+          voiceLabel: audioOptions.voiceLabel || null,
+          voiceNotes: audioOptions.voiceNotes || null,
+          emotion: audioOptions.emotion || null,
+          pace: audioOptions.pace,
+          speakingRate: toNullableFloat(audioOptions.speakingRate),
+          pitch: toNullableFloat(audioOptions.pitch),
+          format: audioOptions.format
+        }
+      : undefined,
+    videoSettings: videoOptions
+      ? {
+          durationSeconds: toNullableInt(videoOptions.durationSeconds),
+          aspectRatio: videoOptions.aspectRatio,
+          resolution: videoOptions.resolution,
+          sourceMode: videoOptions.sourceMode
+        }
+      : undefined
   };
 }
 
@@ -899,4 +1078,38 @@ function splitIds(value: string) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function audioSettingsToOptions(settings: AudioSettings) {
+  return {
+    speakerEntityId: settings.speakerEntityId ?? "",
+    voiceId: settings.voiceId ?? "",
+    voiceLabel: settings.voiceLabel ?? "",
+    voiceNotes: settings.voiceNotes ?? "",
+    pace: settings.pace,
+    emotion: settings.emotion ?? "",
+    speakingRate: settings.speakingRate === null ? "" : String(settings.speakingRate),
+    pitch: settings.pitch === null ? "" : String(settings.pitch),
+    format: settings.format
+  };
+}
+
+function videoSettingsToOptions(settings: VideoSettings, fallbackDurationSeconds?: number | null) {
+  return {
+    durationSeconds: settings.durationSeconds?.toString() ?? fallbackDurationSeconds?.toString() ?? "",
+    aspectRatio: settings.aspectRatio,
+    resolution: settings.resolution,
+    sourceMode: settings.sourceMode
+  };
+}
+
+function toNullableInt(value: string) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function toNullableFloat(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }

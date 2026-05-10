@@ -121,7 +121,8 @@ async function loadPanelPromptInput(
       description: entity.description,
       visualPromptBlock: entity.visualPromptBlock,
       notes: entity.notes,
-      selectedReferenceAssetId: entity.selectedReferenceAssetId
+      selectedReferenceAssetId: entity.selectedReferenceAssetId,
+      metadata: entity.metadata as Record<string, unknown>
     })),
     scenes: panel.project.scenes.map((scene) => ({
       id: scene.id,
@@ -183,7 +184,7 @@ async function resolveModelDefaults(db: DbClient, projectId: string, purpose: Pr
   if (purpose === PromptPurpose.VIDEO) {
     return {
       provider: modelStack?.videoProvider ?? "xai",
-      model: modelStack?.videoModel ?? "grok-imagine"
+      model: modelStack?.videoModel ?? "grok-imagine-video"
     };
   }
 

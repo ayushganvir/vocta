@@ -99,6 +99,7 @@ export interface EntityPromptInput {
   visualPromptBlock?: string | null;
   notes?: string | null;
   selectedReferenceAssetId?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface ScenePromptInput {

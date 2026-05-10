@@ -103,6 +103,8 @@ export async function markPanelPatchStale(
     mappedEntityIds?: string[];
     panelReferenceAssetIds?: string[];
     promptFields?: unknown;
+    audioSettings?: unknown;
+    videoSettings?: unknown;
   }
 ) {
   const reasons = new Set<StaleReason>();
@@ -120,6 +122,14 @@ export async function markPanelPatchStale(
   }
 
   if (patch.promptFields && JSON.stringify(patch.promptFields) !== JSON.stringify(promptFields(current.timelineMetadata))) {
+    reasons.add("panelPromptChanged");
+  }
+
+  if (patch.audioSettings && JSON.stringify(patch.audioSettings) !== JSON.stringify(metadataField(current.timelineMetadata, "audioSettings"))) {
+    reasons.add("panelPromptChanged");
+  }
+
+  if (patch.videoSettings && JSON.stringify(patch.videoSettings) !== JSON.stringify(metadataField(current.timelineMetadata, "videoSettings"))) {
     reasons.add("panelPromptChanged");
   }
 
@@ -164,8 +174,12 @@ function staleObject(value: Prisma.JsonValue): Record<string, Prisma.JsonValue> 
 }
 
 function promptFields(value: Prisma.JsonValue) {
+  return metadataField(value, "promptFields");
+}
+
+function metadataField(value: Prisma.JsonValue, field: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const fields = (value as Prisma.JsonObject).promptFields;
+  const fields = (value as Prisma.JsonObject)[field];
   return fields && typeof fields === "object" && !Array.isArray(fields) ? fields : {};
 }
 

@@ -11,8 +11,29 @@ const nullableText = z
 
 export const entityMetadataSchema = z.object({
   speakerOnly: z.boolean().default(false),
+  voiceId: z.string().trim().optional().default(""),
   voiceLabel: z.string().trim().optional().default(""),
-  voiceNotes: z.string().trim().optional().default("")
+  voiceNotes: z.string().trim().optional().default(""),
+  defaultEmotion: z.string().trim().optional().default(""),
+  speakingRate: z
+    .union([z.number(), z.string()])
+    .optional()
+    .default("")
+    .transform((value) => {
+      if (value === "") return "";
+      const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : "";
+    }),
+  pitch: z
+    .union([z.number(), z.string()])
+    .optional()
+    .default("")
+    .transform((value) => {
+      if (value === "") return "";
+      const parsed = typeof value === "number" ? value : Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : "";
+    }),
+  sampleText: z.string().trim().optional().default("")
 });
 
 export const entityWriteSchema = z.object({
@@ -29,8 +50,13 @@ export const entityWriteSchema = z.object({
   selectedReferenceAssetId: nullableText,
   metadata: entityMetadataSchema.default({
     speakerOnly: false,
+    voiceId: "",
     voiceLabel: "",
-    voiceNotes: ""
+    voiceNotes: "",
+    defaultEmotion: "",
+    speakingRate: "",
+    pitch: "",
+    sampleText: ""
   })
 });
 

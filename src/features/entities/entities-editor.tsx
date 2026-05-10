@@ -18,8 +18,13 @@ type EntityFormState = {
   selectedReferenceAssetId: string;
   notes: string;
   speakerOnly: boolean;
+  voiceId: string;
   voiceLabel: string;
   voiceNotes: string;
+  defaultEmotion: string;
+  speakingRate: string;
+  pitch: string;
+  sampleText: string;
 };
 
 type ExtractionDraftEntity = {
@@ -65,8 +70,13 @@ const emptyForm: EntityFormState = {
   selectedReferenceAssetId: "",
   notes: "",
   speakerOnly: false,
+  voiceId: "",
   voiceLabel: "",
-  voiceNotes: ""
+  voiceNotes: "",
+  defaultEmotion: "",
+  speakingRate: "",
+  pitch: "",
+  sampleText: ""
 };
 
 export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps) {
@@ -113,8 +123,13 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
       selectedReferenceAssetId: entity.selectedReferenceAssetId ?? "",
       notes: entity.notes ?? "",
       speakerOnly: entity.metadata.speakerOnly,
+      voiceId: entity.metadata.voiceId,
       voiceLabel: entity.metadata.voiceLabel,
-      voiceNotes: entity.metadata.voiceNotes
+      voiceNotes: entity.metadata.voiceNotes,
+      defaultEmotion: entity.metadata.defaultEmotion,
+      speakingRate: entity.metadata.speakingRate === "" ? "" : String(entity.metadata.speakingRate),
+      pitch: entity.metadata.pitch === "" ? "" : String(entity.metadata.pitch),
+      sampleText: entity.metadata.sampleText
     });
   }
 
@@ -125,8 +140,13 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
   function payloadFromForm() {
     const metadata: EntityMetadata = {
       speakerOnly: formState.speakerOnly,
+      voiceId: formState.voiceId,
       voiceLabel: formState.voiceLabel,
-      voiceNotes: formState.voiceNotes
+      voiceNotes: formState.voiceNotes,
+      defaultEmotion: formState.defaultEmotion,
+      speakingRate: numberOrBlank(formState.speakingRate),
+      pitch: numberOrBlank(formState.pitch),
+      sampleText: formState.sampleText
     };
 
     return {
@@ -195,6 +215,30 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
       if (formState.id === entity.id) {
         resetForm();
       }
+    });
+  }
+
+  function previewVoice() {
+    startTransition(async () => {
+      const response = await fetch("/api/providers/google/voice-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          voiceId: formState.voiceId,
+          sampleText: formState.sampleText || "This is a Vocta voice preview.",
+          emotion: formState.defaultEmotion,
+          speakingRate: formState.speakingRate,
+          pitch: formState.pitch
+        })
+      });
+      const payload = (await response.json()) as { previewUrl?: string; voiceLabel?: string; error?: string };
+
+      if (!response.ok || !payload.previewUrl) {
+        setStatus(payload.error ?? "Voice preview failed.");
+        return;
+      }
+
+      setStatus(`Voice preview ready: ${payload.voiceLabel ?? (formState.voiceId || "mock voice")} (${payload.previewUrl})`);
     });
   }
 
@@ -343,8 +387,10 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
                   </div>
                   <p>{entity.metadata.speakerOnly ? "Speaker/narrator only, no image reference required" : entity.selectedReferenceAssetId || "Missing reference"}</p>
                   <small>
-                    {referenceWarning ??
-                      (entity.mappedPanelCount > 0 ? `Mapped to ${entity.mappedPanelCount} panel(s)` : "Not mapped")}
+                    {entity.metadata.voiceLabel || entity.metadata.voiceId
+                      ? `Voice: ${entity.metadata.voiceLabel || entity.metadata.voiceId}`
+                      : referenceWarning ??
+                        (entity.mappedPanelCount > 0 ? `Mapped to ${entity.mappedPanelCount} panel(s)` : "Not mapped")}
                     <span className="inlineActions" style={{ marginTop: 6 }}>
                     <button type="button" onClick={() => editEntity(entity)}>
                       Edit
@@ -420,6 +466,11 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
         </label>
 
         <label className="fieldBlock">
+          <span>Voice ID</span>
+          <input value={formState.voiceId} onChange={(event) => setField("voiceId", event.target.value)} />
+        </label>
+
+        <label className="fieldBlock">
           <span>Voice label</span>
           <input value={formState.voiceLabel} onChange={(event) => setField("voiceLabel", event.target.value)} />
         </label>
@@ -427,6 +478,26 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
         <label className="fieldBlock">
           <span>Voice notes</span>
           <textarea value={formState.voiceNotes} rows={3} onChange={(event) => setField("voiceNotes", event.target.value)} />
+        </label>
+
+        <label className="fieldBlock">
+          <span>Default emotion/style</span>
+          <input value={formState.defaultEmotion} onChange={(event) => setField("defaultEmotion", event.target.value)} />
+        </label>
+
+        <label className="fieldBlock">
+          <span>Speaking rate</span>
+          <input value={formState.speakingRate} onChange={(event) => setField("speakingRate", event.target.value)} placeholder="1.0" />
+        </label>
+
+        <label className="fieldBlock">
+          <span>Pitch</span>
+          <input value={formState.pitch} onChange={(event) => setField("pitch", event.target.value)} placeholder="0" />
+        </label>
+
+        <label className="fieldBlock">
+          <span>Sample text</span>
+          <textarea value={formState.sampleText} rows={2} onChange={(event) => setField("sampleText", event.target.value)} />
         </label>
 
         <label className="fieldBlock">
@@ -440,6 +511,9 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
           </button>
           <button type="button" onClick={resetForm}>
             Clear
+          </button>
+          <button type="button" onClick={previewVoice} disabled={isPending}>
+            Preview voice
           </button>
           <span className="compactBadge">{referenceWarnings} reference warning(s)</span>
         </div>
@@ -530,4 +604,10 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
       </section>
     </div>
   );
+}
+
+function numberOrBlank(value: string) {
+  if (!value.trim()) return "";
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : "";
 }

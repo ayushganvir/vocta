@@ -1,6 +1,7 @@
 export type ScreenId =
   | "projects"
   | "source-material"
+  | "configuration"
   | "style-bible"
   | "entities"
   | "scenes"
@@ -50,6 +51,13 @@ export const navItems: NavItem[] = [
     description: "Scripts, notes, references, and uploads"
   },
   {
+    id: "configuration",
+    label: "Configuration",
+    shortLabel: "CF",
+    href: "/configuration",
+    description: "Model stack, provider defaults, and voice defaults"
+  },
+  {
     id: "style-bible",
     label: "Style Bible",
     shortLabel: "SB",
@@ -96,6 +104,11 @@ export const screenTitles: Record<ScreenId, { eyebrow: string; title: string; su
     eyebrow: "Input layer",
     title: "Source Material",
     summary: "Collect script text, notes, links, and image references before any user-triggered analysis."
+  },
+  configuration: {
+    eyebrow: "Project settings",
+    title: "Configuration",
+    summary: "Project-level model stack and provider defaults for explicit generation jobs."
   },
   "style-bible": {
     eyebrow: "Creative constraints",

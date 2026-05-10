@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { serializePanel } from "@/app/api/scenes/_helpers";
+import { generationAspectRatios, videoResolutions, videoSourceModes } from "@/features/generation/settings";
 import { prisma } from "@/server/db";
 import { requestPanelVideo } from "@/server/generation/service";
 
 const videoGenerationSchema = z.object({
   panelId: z.string().min(1),
-  durationSeconds: z.number().int().positive().max(60).nullable().optional()
+  durationSeconds: z.number().int().positive().max(60).nullable().optional(),
+  aspectRatio: z.enum(generationAspectRatios).optional(),
+  resolution: z.enum(videoResolutions).optional(),
+  sourceMode: z.enum(videoSourceModes).optional()
 });
 
 export async function POST(request: Request) {

@@ -111,6 +111,9 @@ function createAsset(input: JobPayload, kind: Exclude<ProviderKind, "text">) {
       metadata: {
         durationSeconds: "durationSeconds" in input && input.durationSeconds ? input.durationSeconds : 6,
         aspectRatio: "aspectRatio" in input ? input.aspectRatio : "9:16",
+        resolution: "resolution" in input ? input.resolution ?? "720p" : "720p",
+        sourceMode: "sourceMode" in input ? input.sourceMode ?? "text_to_video" : "text_to_video",
+        sourceImageAssetIds: "sourceImageAssetIds" in input ? input.sourceImageAssetIds ?? [] : [],
         promptPreview
       }
     };
@@ -121,13 +124,20 @@ function createAsset(input: JobPayload, kind: Exclude<ProviderKind, "text">) {
     fileName: `${input.projectId}-${input.jobType}-fake.${"format" in input ? input.format : "wav"}`,
     mimeType: "format" in input && input.format === "mp3" ? "audio/mpeg" : "audio/wav",
     bytes: encodeTextBytes(`FAKE_AUDIO_PLACEHOLDER\n${promptPreview}\n`),
-    metadata: {
-      durationSeconds: Math.max(2, Math.ceil(promptPreview.length / 18)),
-      transcript: promptPreview,
-      voiceId: "voiceId" in input ? input.voiceId ?? "fake-narrator" : "fake-narrator"
-    }
-  };
-}
+      metadata: {
+        durationSeconds: Math.max(2, Math.ceil(promptPreview.length / 18)),
+        transcript: promptPreview,
+        speakerEntityId: "speakerEntityId" in input ? input.speakerEntityId ?? null : null,
+        voiceId: "voiceId" in input ? input.voiceId ?? "fake-narrator" : "fake-narrator",
+        voiceLabel: "voiceLabel" in input ? input.voiceLabel ?? null : null,
+        voiceNotes: "voiceNotes" in input ? input.voiceNotes ?? null : null,
+        pace: "pace" in input ? input.pace ?? "normal" : "normal",
+        emotion: "emotion" in input ? input.emotion ?? null : null,
+        speakingRate: "speakingRate" in input ? input.speakingRate ?? null : null,
+        pitch: "pitch" in input ? input.pitch ?? null : null
+      }
+    };
+  }
 
 function parseTextResult(input: JobPayload, base: Omit<JobResult, "jobType">): JobResult {
   if (input.jobType === "story_analysis") {

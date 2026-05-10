@@ -6,6 +6,7 @@ describe("workspace navigation", () => {
     expect(navItems.map((item) => item.id)).toEqual([
       "projects",
       "source-material",
+      "configuration",
       "style-bible",
       "entities",
       "scenes",

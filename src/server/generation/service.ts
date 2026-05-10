@@ -8,6 +8,7 @@ import {
   type DbClient
 } from "@/server/db/repositories";
 import { createQueues, enqueueGenerationJob, type VoctaQueueMap } from "@/server/jobs/queues";
+import { normalizeAudioSettings, normalizeVideoSettings } from "@/features/generation/settings";
 import type {
   AudioJobPayload,
   GeneratedAssetContract,
@@ -29,13 +30,21 @@ export type GeneratePanelImageInput = {
 export type GeneratePanelVideoInput = {
   panelId: string;
   durationSeconds?: number | null;
+  aspectRatio?: VideoJobPayload["aspectRatio"];
+  resolution?: VideoJobPayload["resolution"];
+  sourceMode?: VideoJobPayload["sourceMode"];
 };
 
 export type GeneratePanelAudioInput = {
   panelId: string;
+  speakerEntityId?: string | null;
   voiceId?: string | null;
+  voiceLabel?: string | null;
+  voiceNotes?: string | null;
   pace?: AudioJobPayload["pace"];
   emotion?: string | null;
+  speakingRate?: number | null;
+  pitch?: number | null;
   format?: AudioJobPayload["format"];
 };
 
@@ -182,6 +191,7 @@ async function createVideoGenerationRequest(
     select: {
       projectId: true,
       targetDurationSeconds: true,
+      timelineMetadata: true,
       selectedImageAssetId: true,
       firstFrameAssetId: true,
       lastFrameAssetId: true
@@ -197,7 +207,11 @@ async function createVideoGenerationRequest(
     panel.firstFrameAssetId,
     panel.lastFrameAssetId
   ].filter((id): id is string => Boolean(id));
-  const durationSeconds = input.durationSeconds ?? panel.targetDurationSeconds ?? 6;
+  const videoSettings = normalizeVideoSettings(extractMetadataField(panel.timelineMetadata, "videoSettings"));
+  const durationSeconds = input.durationSeconds ?? videoSettings.durationSeconds ?? panel.targetDurationSeconds ?? 6;
+  const aspectRatio = input.aspectRatio ?? videoSettings.aspectRatio ?? DEFAULT_ASPECT_RATIO;
+  const resolution = input.resolution ?? videoSettings.resolution;
+  const sourceMode = input.sourceMode ?? videoSettings.sourceMode;
   const job = await createGenerationJob(db, {
     projectId: compiled.projectId,
     panelId: input.panelId,
@@ -209,6 +223,9 @@ async function createVideoGenerationRequest(
     attachedReferenceAssetIds: compiled.attachedReferenceAssetIds,
     requestPayload: {
       durationSeconds,
+      aspectRatio,
+      resolution,
+      sourceMode,
       sourceImageAssetIds,
       promptPurpose: compiled.purpose
     }
@@ -222,7 +239,9 @@ async function createVideoGenerationRequest(
     generationJobId: job.id,
     requestedAt: nowIso(options.now),
     prompt: compiled.finalPrompt,
-    aspectRatio: DEFAULT_ASPECT_RATIO,
+    aspectRatio,
+    resolution,
+    sourceMode,
     durationSeconds,
     sourceImageAssetIds,
     references: compiled.attachedReferenceAssetIds.map((id) => ({ id, type: "asset" }))
@@ -271,11 +290,18 @@ async function createAudioGenerationRequest(
             select: {
               defaultVoiceId: true
             }
-          }
+          },
+          entities: true
         }
       }
     }
   });
+  const audioSettings = normalizeAudioSettings(extractMetadataField(panel.timelineMetadata, "audioSettings"));
+  const speakerEntityId = input.speakerEntityId ?? audioSettings.speakerEntityId ?? undefined;
+  const speakerEntity = speakerEntityId
+    ? panel.project.entities.find((entity) => entity.id === speakerEntityId)
+    : null;
+  const speakerMetadata = metadataObject(speakerEntity?.metadata);
   const compiled = await compilePanelPrompt(db, {
     panelId: input.panelId,
     purpose: PromptPurpose.AUDIO,
@@ -283,6 +309,17 @@ async function createAudioGenerationRequest(
   });
   const narration = panel.narrationText?.trim() || extractPromptField(panel.timelineMetadata, "audioPrompt") || compiled.finalPrompt;
   const format = input.format ?? "wav";
+  const resolvedVoiceId =
+    input.voiceId ??
+    audioSettings.voiceId ??
+    stringMetadata(speakerMetadata.voiceId) ??
+    panel.project.modelStack?.defaultVoiceId ??
+    null;
+  const resolvedVoiceLabel = input.voiceLabel ?? audioSettings.voiceLabel ?? stringMetadata(speakerMetadata.voiceLabel) ?? null;
+  const resolvedVoiceNotes = input.voiceNotes ?? audioSettings.voiceNotes ?? stringMetadata(speakerMetadata.voiceNotes) ?? null;
+  const resolvedEmotion = input.emotion ?? audioSettings.emotion ?? stringMetadata(speakerMetadata.defaultEmotion) ?? null;
+  const resolvedSpeakingRate = input.speakingRate ?? audioSettings.speakingRate ?? numberMetadata(speakerMetadata.speakingRate);
+  const resolvedPitch = input.pitch ?? audioSettings.pitch ?? numberMetadata(speakerMetadata.pitch);
   const job = await createGenerationJob(db, {
     projectId: compiled.projectId,
     panelId: input.panelId,
@@ -294,9 +331,14 @@ async function createAudioGenerationRequest(
     attachedReferenceAssetIds: compiled.attachedReferenceAssetIds,
     requestPayload: {
       narration,
-      voiceId: input.voiceId ?? panel.project.modelStack?.defaultVoiceId ?? null,
+      speakerEntityId: speakerEntityId ?? null,
+      voiceId: resolvedVoiceId,
+      voiceLabel: resolvedVoiceLabel,
+      voiceNotes: resolvedVoiceNotes,
       pace: input.pace ?? "normal",
-      emotion: input.emotion ?? null,
+      emotion: resolvedEmotion,
+      speakingRate: resolvedSpeakingRate,
+      pitch: resolvedPitch,
       format,
       promptPurpose: compiled.purpose
     }
@@ -310,9 +352,14 @@ async function createAudioGenerationRequest(
     generationJobId: job.id,
     requestedAt: nowIso(options.now),
     narration,
-    voiceId: input.voiceId ?? panel.project.modelStack?.defaultVoiceId ?? undefined,
+    speakerEntityId,
+    voiceId: resolvedVoiceId ?? undefined,
+    voiceLabel: resolvedVoiceLabel ?? undefined,
+    voiceNotes: resolvedVoiceNotes ?? undefined,
     pace: input.pace ?? "normal",
-    emotion: input.emotion ?? undefined,
+    emotion: resolvedEmotion ?? undefined,
+    speakingRate: resolvedSpeakingRate ?? undefined,
+    pitch: resolvedPitch ?? undefined,
     format
   };
   await db.generationJob.update({
@@ -505,8 +552,16 @@ async function persistGeneratedAsset<TPayload extends ImageJobPayload | VideoJob
     ...contract.metadata,
     frameRole: payload.jobType === "image" ? payload.frameRole ?? "image" : undefined,
     sourceImageAssetIds: payload.jobType === "video" ? payload.sourceImageAssetIds ?? [] : undefined,
+    resolution: payload.jobType === "video" ? payload.resolution ?? "720p" : undefined,
+    sourceMode: payload.jobType === "video" ? payload.sourceMode ?? "text_to_video" : undefined,
     pace: payload.jobType === "audio" ? payload.pace ?? "normal" : undefined,
-    emotion: payload.jobType === "audio" ? payload.emotion ?? null : undefined
+    speakerEntityId: payload.jobType === "audio" ? payload.speakerEntityId ?? null : undefined,
+    voiceId: payload.jobType === "audio" ? payload.voiceId ?? null : undefined,
+    voiceLabel: payload.jobType === "audio" ? payload.voiceLabel ?? null : undefined,
+    voiceNotes: payload.jobType === "audio" ? payload.voiceNotes ?? null : undefined,
+    emotion: payload.jobType === "audio" ? payload.emotion ?? null : undefined,
+    speakingRate: payload.jobType === "audio" ? payload.speakingRate ?? null : undefined,
+    pitch: payload.jobType === "audio" ? payload.pitch ?? null : undefined
   };
 
   return createGeneratedAsset(db, {
@@ -654,11 +709,40 @@ function extractPromptField(metadata: Prisma.JsonValue, field: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function extractMetadataField(metadata: Prisma.JsonValue, field: string) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
+  const value = (metadata as Prisma.JsonObject)[field];
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function metadataObject(value: Prisma.JsonValue | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Prisma.JsonObject : {};
+}
+
+function stringMetadata(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function numberMetadata(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function buildAudioUserNotes(input: GeneratePanelAudioInput) {
   const lines = [
     "Generate voiceover audio for this panel.",
+    input.speakerEntityId ? `Speaker entity ID: ${input.speakerEntityId}.` : null,
+    input.voiceId ? `Voice ID override: ${input.voiceId}.` : null,
+    input.voiceLabel ? `Voice label: ${input.voiceLabel}.` : null,
+    input.voiceNotes ? `Voice notes: ${input.voiceNotes}.` : null,
     input.pace ? `Intended speaking pace: ${input.pace}.` : null,
-    input.emotion ? `Emotion: ${input.emotion}.` : null
+    input.emotion ? `Emotion: ${input.emotion}.` : null,
+    input.speakingRate ? `Speaking rate: ${input.speakingRate}.` : null,
+    input.pitch ? `Pitch: ${input.pitch}.` : null
   ];
 
   return lines.filter(Boolean).join("\n");

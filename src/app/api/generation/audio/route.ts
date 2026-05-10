@@ -7,9 +7,14 @@ import { requestPanelAudio } from "@/server/generation/service";
 
 const audioGenerationSchema = z.object({
   panelId: z.string().min(1),
+  speakerEntityId: z.string().trim().min(1).nullable().optional(),
   voiceId: z.string().trim().min(1).nullable().optional(),
+  voiceLabel: z.string().trim().min(1).nullable().optional(),
+  voiceNotes: z.string().trim().min(1).nullable().optional(),
   pace: z.enum(["slow", "normal", "fast"]).optional(),
   emotion: z.string().trim().min(1).nullable().optional(),
+  speakingRate: z.number().positive().max(4).nullable().optional(),
+  pitch: z.number().min(-20).max(20).nullable().optional(),
   format: z.enum(["wav", "mp3"]).optional()
 });
 

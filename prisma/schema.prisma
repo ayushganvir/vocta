@@ -180,7 +180,7 @@ model ModelStack {
   imageProvider    String   @default("openai")
   imageModel       String   @default("gpt-image-1")
   videoProvider    String   @default("xai")
-  videoModel       String   @default("grok-imagine")
+  videoModel       String   @default("grok-imagine-video")
   voiceProvider    String   @default("google")
   voiceModel       String   @default("google-tts")
   defaultVoiceId   String?

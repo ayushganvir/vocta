@@ -190,6 +190,7 @@ export function createEntityReferenceLayer(
         entity.selectedReferenceAssetId
           ? `Reference asset ID: ${entity.selectedReferenceAssetId}`
           : null,
+        voiceLines(entity.metadata),
         entity.notes ? `Notes: ${entity.notes}` : null
       ])
     )
@@ -397,6 +398,29 @@ function compareSceneOrder(a: ScenePromptInput, b: ScenePromptInput) {
 
 function compareEntity(a: EntityPromptInput, b: EntityPromptInput) {
   return a.type.localeCompare(b.type) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+}
+
+function voiceLines(metadata: Record<string, unknown> | null | undefined) {
+  if (!metadata) return null;
+  const lines = [
+    stringValue(metadata.voiceId) ? `Voice ID: ${stringValue(metadata.voiceId)}` : null,
+    stringValue(metadata.voiceLabel) ? `Voice label: ${stringValue(metadata.voiceLabel)}` : null,
+    stringValue(metadata.defaultEmotion) ? `Default emotion: ${stringValue(metadata.defaultEmotion)}` : null,
+    numberOrStringValue(metadata.speakingRate) ? `Speaking rate: ${numberOrStringValue(metadata.speakingRate)}` : null,
+    numberOrStringValue(metadata.pitch) ? `Pitch: ${numberOrStringValue(metadata.pitch)}` : null,
+    stringValue(metadata.voiceNotes) ? `Voice notes: ${stringValue(metadata.voiceNotes)}` : null
+  ].filter(isPresent);
+
+  return lines.length ? lines.join("\n") : null;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function numberOrStringValue(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return stringValue(value);
 }
 
 function formatDurationRange(min?: number | null, max?: number | null) {

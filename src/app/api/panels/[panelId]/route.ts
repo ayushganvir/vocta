@@ -4,7 +4,7 @@ import { prisma } from "@/server/db";
 import {
   badRequest,
   compactScenePanelOrder,
-  mergePromptFields,
+  mergeTimelineMetadata,
   notFound,
   panelPatchSchema,
   panelUpdateData,
@@ -45,8 +45,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const current = await prisma.panel.findUniqueOrThrow({ where: { id: panelId } });
     const data = panelUpdateData(parsed.data);
 
-    if (parsed.data.promptFields) {
-      data.timelineMetadata = mergePromptFields(current.timelineMetadata, parsed.data.promptFields);
+    if (parsed.data.promptFields || parsed.data.audioSettings || parsed.data.videoSettings) {
+      data.timelineMetadata = mergeTimelineMetadata(current.timelineMetadata, parsed.data);
     }
 
     await prisma.panel.update({

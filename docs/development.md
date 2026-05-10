@@ -91,7 +91,7 @@ At this scaffold stage, `lint` delegates to `typecheck` to keep the command non-
 
 ## Current Scope
 
-Wave 7 jobs visibility and queue-backed execution is integrated:
+Wave 8 model, voice, and generation settings are integrated:
 
 1. Project, source material, Style Bible, entities, scenes, panels, and prompt compilation are backed by Prisma APIs.
 2. AI drafting exists for story analysis, entity extraction/mapping, Style Bible drafts, and panel prompt enhancement; drafts require explicit apply/save actions.
@@ -101,5 +101,8 @@ Wave 7 jobs visibility and queue-backed execution is integrated:
 6. `/jobs` exposes database-backed job list/detail, polling, manual retry, and manual cancel.
 7. Export readiness queues ordered package generation; the worker creates a downloadable ZIP with panel folders, selected assets, metadata JSON files, `timeline_manifest.json`, and `timeline_manifest.csv`.
 8. Source material, Style Bible, entity, panel field, reference, mapping, and panel-order changes mark dependent panels stale without triggering generation. Users can manually mark a panel reviewed.
+9. `/configuration` exposes project-level model stack defaults and provider settings JSON.
+10. Entity records can store speaker/voice metadata and use fake Google voice catalog/preview endpoints.
+11. Panel video/audio settings persist in `timelineMetadata` and flow into queued generation payloads for debug inspection.
 
 Real provider adapters are still planned work.

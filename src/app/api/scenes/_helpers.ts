@@ -3,6 +3,12 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/server/db";
+import {
+  audioSettingsSchema,
+  normalizeAudioSettings,
+  normalizeVideoSettings,
+  videoSettingsSchema
+} from "@/features/generation/settings";
 
 export const panelMetadataSchema = z.object({
   referenceNotes: z.string().optional().nullable(),
@@ -22,7 +28,9 @@ export const panelPatchSchema = z.object({
   notes: z.string().optional().nullable(),
   mappedEntityIds: z.array(z.string()).optional(),
   panelReferenceAssetIds: z.array(z.string()).optional(),
-  promptFields: panelMetadataSchema.optional()
+  promptFields: panelMetadataSchema.optional(),
+  audioSettings: audioSettingsSchema.optional(),
+  videoSettings: videoSettingsSchema.optional()
 });
 
 export type PanelPatchInput = z.infer<typeof panelPatchSchema>;
@@ -115,6 +123,8 @@ export function serializePanel(panel: {
     selectedVideoAssetId: panel.selectedVideoAssetId ?? null,
     selectedAudioAssetId: panel.selectedAudioAssetId ?? null,
     promptFields: isJsonObject(metadata.promptFields) ? metadata.promptFields : {},
+    audioSettings: normalizeAudioSettings(metadata.audioSettings),
+    videoSettings: normalizeVideoSettings(metadata.videoSettings),
     staleState: panel.staleState,
     generatedAssets: panel.generatedAssets?.map(serializeGeneratedAsset) ?? [],
     generationJobs: panel.generationJobs?.map(serializeGenerationJob) ?? [],
@@ -318,6 +328,20 @@ export function mergePromptFields(
   return {
     ...metadata,
     promptFields: promptFields ?? {}
+  };
+}
+
+export function mergeTimelineMetadata(
+  timelineMetadata: Prisma.JsonValue,
+  input: Pick<PanelPatchInput, "promptFields" | "audioSettings" | "videoSettings">
+): Prisma.InputJsonValue {
+  const metadata = isJsonObject(timelineMetadata) ? timelineMetadata : {};
+
+  return {
+    ...metadata,
+    ...(input.promptFields ? { promptFields: input.promptFields } : {}),
+    ...(input.audioSettings ? { audioSettings: input.audioSettings } : {}),
+    ...(input.videoSettings ? { videoSettings: input.videoSettings } : {})
   };
 }
 

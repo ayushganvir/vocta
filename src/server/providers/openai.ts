@@ -246,7 +246,7 @@ export function createOpenAiTextProvider(model: string): ProviderAdapter<PromptJ
 }
 
 function openAiApiKey() {
-  return process.env.OPENAI_KEY ?? process.env.OPENAI_API_KEY ?? "";
+  return process.env.OPENAI_KEY || process.env.OPENAI_API_KEY || "";
 }
 
 function openAiImageSize(aspectRatio: ImageJobPayload["aspectRatio"]) {

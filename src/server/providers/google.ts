@@ -30,7 +30,7 @@ export function createGoogleTtsProvider(model: string): ProviderAdapter<AudioJob
       return { valid: errors.length === 0, errors, warnings: [] };
     },
     buildRequest(input) {
-      const apiKey = process.env.GOOGLE_TTS_API_KEY ?? process.env.GOOGLE_API_KEY ?? "";
+      const apiKey = googleApiKey();
       const audioEncoding = input.format === "mp3" ? "MP3" : "LINEAR16";
 
       return {
@@ -68,7 +68,7 @@ export function createGoogleTtsProvider(model: string): ProviderAdapter<AudioJob
       };
     },
     async execute(request) {
-      if (!process.env.GOOGLE_TTS_API_KEY && !process.env.GOOGLE_API_KEY) {
+      if (!googleApiKey()) {
         throw new Error("GOOGLE_TTS_API_KEY or GOOGLE_API_KEY is required when PROVIDER_MODE=real.");
       }
 
@@ -153,6 +153,10 @@ function inferLanguageCode(voiceId: string | undefined) {
   if (!voiceId) return "en-US";
   const match = voiceId.match(/^([a-z]{2}-[A-Z]{2})-/);
   return match?.[1] ?? "en-US";
+}
+
+function googleApiKey() {
+  return process.env.GOOGLE_TTS_API_KEY || process.env.GOOGLE_API_KEY || "";
 }
 
 function voiceName(body: Record<string, unknown>) {

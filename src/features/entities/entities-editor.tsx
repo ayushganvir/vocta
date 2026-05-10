@@ -61,6 +61,14 @@ type MappingDraft = {
   mappings: MappingSuggestion[];
 };
 
+type GoogleVoiceCatalogItem = {
+  voiceId: string;
+  label: string;
+  language: string;
+  gender: string;
+  family: string;
+};
+
 const emptyForm: EntityFormState = {
   id: null,
   name: "",
@@ -87,6 +95,8 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
   const [extractionDraft, setExtractionDraft] = useState<ExtractionDraft | null>(null);
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [mappingDraft, setMappingDraft] = useState<MappingDraft | null>(null);
+  const [voiceCatalog, setVoiceCatalog] = useState<GoogleVoiceCatalogItem[]>([]);
+  const [voicePreviewUrl, setVoicePreviewUrl] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const referenceWarnings = useMemo(
@@ -135,6 +145,7 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
 
   function resetForm() {
     setFormState(emptyForm);
+    setVoicePreviewUrl("");
   }
 
   function payloadFromForm() {
@@ -231,14 +242,45 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
           pitch: formState.pitch
         })
       });
-      const payload = (await response.json()) as { previewUrl?: string; voiceLabel?: string; error?: string };
+      const payload = (await response.json()) as {
+        previewUrl?: string;
+        audioDataUrl?: string;
+        voiceLabel?: string;
+        mode?: string;
+        warnings?: string[];
+        error?: string;
+      };
+      const previewUrl = payload.audioDataUrl ?? payload.previewUrl;
 
-      if (!response.ok || !payload.previewUrl) {
+      if (!response.ok || !previewUrl) {
         setStatus(payload.error ?? "Voice preview failed.");
         return;
       }
 
-      setStatus(`Voice preview ready: ${payload.voiceLabel ?? (formState.voiceId || "mock voice")} (${payload.previewUrl})`);
+      setVoicePreviewUrl(previewUrl);
+      setStatus(
+        `Voice preview ready: ${payload.voiceLabel ?? (formState.voiceId || "mock voice")} (${payload.mode ?? "fake"} mode). ${(payload.warnings ?? []).join(" ")}`
+      );
+    });
+  }
+
+  function loadGoogleVoices() {
+    startTransition(async () => {
+      const response = await fetch("/api/providers/google/voices?language=en", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        voices?: GoogleVoiceCatalogItem[];
+        mode?: string;
+        warnings?: string[];
+        error?: string;
+      };
+
+      if (!response.ok || !payload.voices) {
+        setStatus(payload.error ?? "Google voice catalog failed.");
+        return;
+      }
+
+      setVoiceCatalog(payload.voices);
+      setStatus(`Loaded ${payload.voices.length} Google voice(s) (${payload.mode ?? "fake"} mode). ${(payload.warnings ?? []).join(" ")}`);
     });
   }
 
@@ -470,6 +512,27 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
           <input value={formState.voiceId} onChange={(event) => setField("voiceId", event.target.value)} />
         </label>
 
+        {voiceCatalog.length > 0 ? (
+          <label className="fieldBlock">
+            <span>Voice catalog</span>
+            <select
+              value={formState.voiceId}
+              onChange={(event) => {
+                const voice = voiceCatalog.find((item) => item.voiceId === event.target.value);
+                setField("voiceId", event.target.value);
+                setField("voiceLabel", voice?.label ?? event.target.value);
+              }}
+            >
+              <option value="">Select a Google voice</option>
+              {voiceCatalog.map((voice) => (
+                <option key={voice.voiceId} value={voice.voiceId}>
+                  {voice.label} ({voice.gender}, {voice.family})
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+
         <label className="fieldBlock">
           <span>Voice label</span>
           <input value={formState.voiceLabel} onChange={(event) => setField("voiceLabel", event.target.value)} />
@@ -512,11 +575,19 @@ export function EntitiesEditor({ project, initialEntities }: EntitiesEditorProps
           <button type="button" onClick={resetForm}>
             Clear
           </button>
+          <button type="button" onClick={loadGoogleVoices} disabled={isPending}>
+            Load voices
+          </button>
           <button type="button" onClick={previewVoice} disabled={isPending}>
             Preview voice
           </button>
           <span className="compactBadge">{referenceWarnings} reference warning(s)</span>
         </div>
+        {voicePreviewUrl ? (
+          <audio controls src={voicePreviewUrl} style={{ width: "100%" }}>
+            Voice preview
+          </audio>
+        ) : null}
       </section>
 
       <section className="widePanel">

@@ -102,13 +102,13 @@ Wave 9 provider routing and debug visibility are integrated:
 7. Export readiness queues ordered package generation; the worker creates a downloadable ZIP with panel folders, selected assets, metadata JSON files, `timeline_manifest.json`, and `timeline_manifest.csv`.
 8. Source material, Style Bible, entity, panel field, reference, mapping, and panel-order changes mark dependent panels stale without triggering generation. Users can manually mark a panel reviewed.
 9. `/configuration` exposes project-level model stack defaults and provider settings JSON.
-10. Entity records can store speaker/voice metadata and use fake Google voice catalog/preview endpoints.
+10. Entity records can store speaker/voice metadata and use explicit Google voice catalog/preview endpoints. Fake mode returns seeded voices and fake preview audio without external calls; real mode can list Google voices and synthesize a capped preview after a user click.
 11. Panel video/audio settings persist in `timelineMetadata` and flow into queued generation payloads for debug inspection.
 12. Media generation runs through a provider registry. Local/default mode uses fake adapters while preserving configured provider/model metadata; `PROVIDER_MODE=real` routes supported jobs to adapter stubs.
 13. Real-mode adapter stubs exist for xAI video and Google TTS. They validate/build requests and fail clearly if required keys are missing.
 14. `/jobs` shows resolved media settings above raw payloads for faster inspection.
 
-Real image and text provider adapters are still planned work.
+Real image and text provider adapters are wired for narrow MVP routes.
 
 ## Provider Mode
 
@@ -132,6 +132,8 @@ Current real-mode support is intentionally narrow:
 - `openai` prompt jobs map to the OpenAI Responses adapter.
 - `xai` video jobs map to the xAI video adapter.
 - `google` audio jobs map to the Google TTS adapter.
+- `GET /api/providers/google/voices` maps to seeded fake voices in fake mode and Google `voices:list` in real mode.
+- `POST /api/providers/google/voice-preview` returns fake preview audio in fake mode and a capped Google TTS preview in real mode.
 - Unsupported real routes fail loudly instead of silently falling back.
 
 Use `/configuration` to see the current provider capability matrix. It shows the active provider mode, which providers have real adapters, which credentials are present, and which controls are not fully verified yet.
@@ -142,3 +144,4 @@ Live API smoke tests should be explicit and cheap:
 - Use `PROVIDER_MODE=real` only for deliberate live adapter checks.
 - For OpenAI Images, the adapter requests `n=1`, `quality=low`, and one generated image.
 - For OpenAI Responses, the adapter caps prompt compilation at `max_output_tokens=300`.
+- For Google voice preview, the endpoint caps sample text at 160 characters and returns inline preview audio instead of creating a generation job.
